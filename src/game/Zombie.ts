@@ -5,7 +5,7 @@ import { drawFigure, ease, lerpPose, pose, BONES, type FigurePoints, type Pose, 
 import type { Player, Rect, SwingKind } from './Player';
 import { sfx } from './sfx';
 
-export type ZombieState = 'rising' | 'walk' | 'windup' | 'strike' | 'recover' | 'hurt' | 'dying';
+export type ZombieState = 'rising' | 'falling' | 'walk' | 'windup' | 'strike' | 'recover' | 'hurt' | 'dying';
 
 const BASE_H = 110;
 const BASE_W = 30;
@@ -21,7 +21,11 @@ const Z_DEAD = pose({ lean: 0, head: 0.5, fThigh: 0.35, fShin: 0.6, bThigh: -0.1
 export interface ZombieHost {
   zombieStrike(z: Zombie, band: Rect): void;
   zombieGone(z: Zombie): void;
+  dustAt(x: number, y: number, n: number): void;
 }
+
+/** rise: out of the earth; emerge: walks out of a door/coffin/barrel; drop: falls from a ledge/window; parachute: floats down. */
+export type SpawnMode = 'rise' | 'emerge' | 'drop' | 'parachute';
 
 let seedCounter = 1;
 
@@ -53,7 +57,7 @@ export class Zombie {
   private lungeUntil = 0;
   private lungeCooldown = 1 + Math.random() * 2;
 
-  constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number, readonly variant: ZombieVariant = 'plain') {
+  constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number, readonly variant: ZombieVariant = 'plain', readonly spawn: SpawnMode = 'rise', startY = GROUND_Y) {
     this.def = ZOMBIES[size];
     this.scale = this.def.scale * FIG * (0.95 + Math.random() * 0.1);
     this.maxHp = Math.round(this.def.hp * strength);
@@ -61,14 +65,19 @@ export class Zombie {
     this.damage = Math.round(this.def.damage * (1 + (strength - 1) * 0.6));
     this.speed = this.def.speed * 1.15 * (1 + (strength - 1) * 0.25) * (0.9 + Math.random() * 0.2);
     const h = BASE_H * this.scale;
-    this.zone = scene.add.zone(x, GROUND_Y - h / 2, BASE_W * this.scale, h);
+    this.zone = scene.add.zone(x, startY - h / 2, BASE_W * this.scale, h);
     scene.physics.add.existing(this.zone);
     this.body = this.zone.body as Phaser.Physics.Arcade.Body;
     this.body.setCollideWorldBounds(true);
     this.body.setAllowGravity(false);
     this.gfx = scene.add.graphics().setDepth(this.size === 'giant' ? 14 : 15 + Math.random());
     this.cur = pose({ ...Z_WALK_BASE, rot: 0 });
-    sfx.rise();
+    if (spawn === 'rise') sfx.rise();
+    if (spawn === 'drop' || spawn === 'parachute') {
+      this.state = 'falling';
+      this.body.setAllowGravity(true);
+      if (spawn === 'parachute') this.body.setMaxVelocityY(95);
+    }
   }
 
   get x() {
@@ -85,7 +94,7 @@ export class Zombie {
   }
   /** Can be hit (not still deep in the ground, not dying). */
   get hittable() {
-    return this.alive && !(this.state === 'rising' && this.stateT < 0.55);
+    return this.alive && !(this.state === 'rising' && this.stateT < (this.spawn === 'emerge' ? 0.3 : 0.55));
   }
 
   hurtbox(): Rect {
@@ -137,9 +146,20 @@ export class Zombie {
     const lowAttack = this.size === 'small';
 
     switch (this.state) {
+      case 'falling': {
+        this.body.setVelocityX(0);
+        if (!player.dead) this.facing = dx >= 0 ? 1 : -1;
+        if (this.body.blocked.down) {
+          this.body.setMaxVelocityY(1400);
+          this.host.dustAt(this.x, this.footY, this.spawn === 'parachute' ? 6 : 12);
+          this.chuteDrop = this.spawn === 'parachute' ? 1 : 0;
+          this.setState('recover');
+        }
+        break;
+      }
       case 'rising': {
         this.body.setVelocity(0, 0);
-        const riseT = 0.95;
+        const riseT = this.spawn === 'emerge' ? 0.7 : 0.95;
         if (this.stateT >= riseT) {
           this.body.setAllowGravity(true);
           this.setState('walk');
@@ -220,6 +240,8 @@ export class Zombie {
     const d = this.def;
     const smooth = (target: Pose, k: number) => lerpPose(this.cur, target, 1 - Math.exp(-dt * k));
     switch (this.state) {
+      case 'falling':
+        return smooth(pose({ ...Z_WALK_BASE, fUpper: 2.7, fFore: 2.9, bUpper: 2.5, bFore: 2.7, fThigh: 0.4, fShin: 0.1, bThigh: -0.2, bShin: -0.3 }), 8);
       case 'rising':
         return smooth(pose({ ...Z_WALK_BASE, fUpper: 2.6, fFore: 2.8, bUpper: 2.3, bFore: 2.6, lean: 0.1 }), 6);
       case 'walk': {
@@ -266,11 +288,14 @@ export class Zombie {
     const g = this.gfx;
     g.clear();
     let sink = 0;
-    if (this.state === 'rising') {
+    let alpha = 1;
+    if (this.state === 'rising' && this.spawn === 'rise') {
       const t = Math.min(1, this.stateT / 0.95);
       sink = (1 - ease.out(t)) * (this.height + 10);
+    } else if (this.state === 'rising') {
+      alpha = Math.min(1, this.stateT / 0.5); // steps out of the dark doorway
     }
-    let alpha = 1;
+    if (this.spawn === 'parachute') this.drawChute(g);
     if (this.state === 'dying' && this.stateT > 1.9) alpha = Math.max(0, 1 - (this.stateT - 1.9) / 0.7);
     this.lastPoints = drawFigure(g, this.x, this.footY + sink, this.facing, this.scale, this.cur, {
       kind: 'zombie',
@@ -300,6 +325,32 @@ export class Zombie {
       g.lineStyle(2, 0x111111, 1);
       g.strokeRect(this.x - w / 2, top, w, 8);
     }
+  }
+
+  /** 1 while the chute is collapsing after landing, 0 when gone. */
+  private chuteDrop = 0;
+
+  private drawChute(g: Phaser.GameObjects.Graphics) {
+    const falling = this.state === 'falling';
+    if (!falling && this.chuteDrop <= 0) return;
+    if (!falling) this.chuteDrop -= 0.02;
+    const a = falling ? 1 : Math.max(0, this.chuteDrop);
+    const top = this.footY - this.height - 70 * this.scale + (falling ? Math.sin(this.time * 3) * 3 : (1 - a) * 60);
+    const w = 70 * this.scale;
+    // torn canopy + strings to the hands
+    g.fillStyle(0xf7f7f2, a);
+    g.lineStyle(3, 0x111111, a);
+    g.beginPath();
+    g.arc(this.x, top + w * 0.5, w, Math.PI, 0, false);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+    g.lineStyle(1.5, 0x111111, a);
+    for (const k of [-1, -0.4, 0.4, 1]) g.lineBetween(this.x + k * w, top + w * 0.5, this.x + k * 8, this.footY - this.height * 0.75);
+    // a couple of rips
+    g.lineStyle(2, 0x111111, a);
+    g.lineBetween(this.x - w * 0.3, top + w * 0.1, this.x - w * 0.2, top + w * 0.35);
+    g.lineBetween(this.x + w * 0.45, top + w * 0.2, this.x + w * 0.35, top + w * 0.45);
   }
 
   destroy() {

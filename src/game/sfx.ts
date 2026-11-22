@@ -310,6 +310,19 @@ class Sfx {
     this.noise(t, 0.35, 'bandpass', 400, 1800, 0.35, 2);
   }
 
+  door() {
+    const t = this.now();
+    if (!t) return;
+    this.tone(t, 0.45, 'sawtooth', 140, 90, 0.08, 0.05);
+    this.noise(t, 0.3, 'lowpass', 800, 200, 0.25);
+  }
+
+  heal() {
+    const t = this.now();
+    if (!t) return;
+    [523, 659, 784].forEach((f, i) => this.tone(t + i * 0.07, 0.22, 'triangle', f, f, 0.2));
+  }
+
   thunder() {
     const t = this.now();
     if (!t) return;

@@ -110,10 +110,10 @@ export function buildLevel(chapter: number, level: number): LevelDef {
   const ch = CHAPTERS[chapter];
   const n = chapter * 5 + level; // overall difficulty step 0..14
   const rand = rng(1000 + n * 97);
-  const waveCount = 2 + Math.floor(level / 2);
+  const waveCount = 2; // v3: two waves per level, then you move on to a new place
   const waves: WaveDef[] = [];
   for (let w = 0; w < waveCount; w++) {
-    const count = 3 + n + w;
+    const count = 4 + n + w * 2;
     const pBig = Math.min(0.35, 0.02 + n * 0.025 + w * 0.02);
     const pSmall = 0.3;
     const zombies: ZombieSize[] = [];

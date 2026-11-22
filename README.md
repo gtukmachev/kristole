@@ -36,7 +36,7 @@ To redeploy a release by hand: Actions → "Release & deploy to GitHub Pages" �
 | ↓ (hold) | duck |
 | W | swing up (3 random animations standing; own moves when jumping / ducking) |
 | S | swing down (in the air: stab downward) |
-| A or D (hold) | **block** with the sword – costs shield (grey bar), which refills after a short pause |
+| A or D (hold) | **block**: the sword folds away and a shield unfolds; blocked hits cost shield (grey bar), which always refills |
 | Esc | pause / menu |
 | M | sound on / off |
 
@@ -44,7 +44,12 @@ Menus also work with the mouse.
 
 ## How it plays
 
-- One player against waves of zombies. A level has several waves; every level brings more and stronger zombies.
+- One player against waves of zombies. Every level is **its own place** with 2 waves; then an exit opens (GO →),
+  you walk into it and the world slides on to the next place. Each place has its own way zombies arrive:
+  out of the earth, cave mouths, crypt doors, coffins, barrels, cabinets, armour stands, dropping from ledges and
+  chapel windows, or floating down on parachutes.
+- **Red hearts** heal +25: one waits on a ledge in every place (jump / wall-bounce / flip up to it), and killed zombies
+  sometimes drop one (big ones more often).
 - Zombies come in sizes: **small** ones are fast and bite low (jump over them; only a **down** swing reaches them),
   **medium** and **big** ones swing high (duck under it). The last wave of a chapter brings a **giant**.
 - An arrow above a zombie shows what to do when it winds up: ↓ duck, ↑ jump.
@@ -52,7 +57,8 @@ Menus also work with the mouse.
 - Block (A / D): a blocked hit only pushes you back, but costs shield. On level 1 the shield holds two medium hits, the third breaks through.
 - If a zombie is a little out of reach, a standing swing lunges forward.
 - Points for every zombie, combo multiplier for quick kills, bonus for each level.
-- 3 chapters × 5 levels: The Cliff, The Graveyard, The Castle. Finishing a chapter unlocks the next one.
+- 3 chapters × 5 places: The Cliff (foot, cave entrance, inside the cave, cliff path, summit), The Graveyard
+  (gates, crypts, chapel, open graves, mausoleum), The Castle (drawbridge, courtyard, armory, ramparts, throne room). Finishing a chapter unlocks the next one.
 - Leaderboard, avatar name and progress are stored in the browser (localStorage).
 - Chapter one shows short beginner tips (once). Zombies dress differently per chapter.
 

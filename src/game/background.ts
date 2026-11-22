@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { ARENA_LEFT, ARENA_RIGHT, GROUND_Y, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
-import type { BackgroundId } from './data';
+import type { PlaceDef } from './places';
+import { drawPlace } from './placeArt';
 
-type G = Phaser.GameObjects.Graphics;
-const P = (pts: { x: number; y: number }[]) => pts as unknown as Phaser.Math.Vector2[];
+export type G = Phaser.GameObjects.Graphics;
+export const P = (pts: { x: number; y: number }[]) => pts as unknown as Phaser.Math.Vector2[];
 
-function rng(seed: number) {
+export function rng(seed: number) {
   let s = seed >>> 0;
   return () => {
     s = (s * 1664525 + 1013904223) >>> 0;
@@ -14,7 +15,7 @@ function rng(seed: number) {
 }
 
 /** A slightly wobbly "pen" line. */
-function penLine(g: G, x1: number, y1: number, x2: number, y2: number, w: number, color: number, rand: () => number, alpha = 1) {
+export function penLine(g: G, x1: number, y1: number, x2: number, y2: number, w: number, color: number, rand: () => number, alpha = 1) {
   const len = Math.hypot(x2 - x1, y2 - y1);
   const steps = Math.max(2, Math.floor(len / 40));
   g.lineStyle(w, color, alpha);
@@ -28,7 +29,7 @@ function penLine(g: G, x1: number, y1: number, x2: number, y2: number, w: number
   g.strokePath();
 }
 
-function hatch(g: G, poly: { x: number; y: number }[], spacing: number, color: number, alpha: number, w = 1.5) {
+export function hatch(g: G, poly: { x: number; y: number }[], spacing: number, color: number, alpha: number, w = 1.5) {
   // Diagonal hatching clipped to a polygon's bounding box, kept inside via point-in-polygon test per segment.
   const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -54,7 +55,7 @@ function hatch(g: G, poly: { x: number; y: number }[], spacing: number, color: n
   }
 }
 
-function paper(g: G, rand: () => number) {
+export function paper(g: G, rand: () => number) {
   g.fillStyle(PAPER, 1);
   g.fillRect(0, 0, WIDTH, HEIGHT);
   // paper grain
@@ -64,7 +65,7 @@ function paper(g: G, rand: () => number) {
   }
 }
 
-function cliff(g: G) {
+export function cliff(g: G) {
   const rand = rng(7);
   paper(g, rand);
   // sun
@@ -122,7 +123,7 @@ function cliff(g: G) {
   }
 }
 
-function deadTree(g: G, x: number, y: number, len: number, angle: number, depth: number, rand: () => number) {
+export function deadTree(g: G, x: number, y: number, len: number, angle: number, depth: number, rand: () => number) {
   const x2 = x + Math.cos(angle) * len;
   const y2 = y + Math.sin(angle) * len;
   penLine(g, x, y, x2, y2, Math.max(1.5, depth * 1.8), INK_SOFT, rand, 0.9);
@@ -133,7 +134,7 @@ function deadTree(g: G, x: number, y: number, len: number, angle: number, depth:
   }
 }
 
-function graveyard(g: G) {
+export function graveyard(g: G) {
   const rand = rng(21);
   paper(g, rand);
   // moon
@@ -195,7 +196,7 @@ function graveyard(g: G) {
   }
 }
 
-function castle(g: G) {
+export function castle(g: G) {
   const rand = rng(33);
   paper(g, rand);
   // distant towers
@@ -273,12 +274,8 @@ export function bake(scene: Phaser.Scene, key: string, draw: (g: G) => void, dep
   return scene.add.image(0, 0, key).setOrigin(0).setDepth(depth);
 }
 
-export function drawBackground(scene: Phaser.Scene, id: BackgroundId) {
-  const bg = bake(scene, `bg-${id}`, (g) => {
-    if (id === 'cliff') cliff(g);
-    else if (id === 'graveyard') graveyard(g);
-    else castle(g);
-  }, 0);
+export function drawBackground(scene: Phaser.Scene, place: PlaceDef) {
+  const bg = bake(scene, `bg-${place.id}`, (g) => drawPlace(g, place), 0);
   // Ground cover sits in front of the fighters so zombies can rise out of the earth.
   const ground = bake(scene, 'ground', (g) => {
     const rand = rng(99);

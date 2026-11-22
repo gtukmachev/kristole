@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { GROUND_Y, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
-import type { BackgroundId } from './data';
 import { sfx } from './sfx';
 
-/** Living background layer per chapter: clouds & birds, bats & lightning, torch flames & embers. */
+export type AmbientMode = 'sky' | 'night' | 'torches' | 'none';
+
+/** Living background layer per place: clouds & birds, bats & lightning, torch flames & embers. */
 export class Ambient {
   private g: Phaser.GameObjects.Graphics;
   private bolt: Phaser.GameObjects.Graphics;
@@ -13,14 +14,14 @@ export class Ambient {
   private embers: { x: number; y: number; vy: number; life: number }[] = [];
   private nextLightning = 6 + Math.random() * 6;
 
-  constructor(private scene: Phaser.Scene, private id: BackgroundId) {
+  constructor(private scene: Phaser.Scene, private id: AmbientMode) {
     this.g = scene.add.graphics().setDepth(5);
     this.bolt = scene.add.graphics().setDepth(6);
     const r = Math.random;
-    if (id === 'cliff') {
+    if (id === 'sky') {
       for (let i = 0; i < 4; i++) this.clouds.push({ x: 200 + r() * 920, y: 70 + r() * 150, s: 0.7 + r() * 0.8, v: 6 + r() * 10 });
       for (let i = 0; i < 3; i++) this.fliers.push(this.newFlier(r() * WIDTH));
-    } else if (id === 'graveyard') {
+    } else if (id === 'night') {
       for (let i = 0; i < 4; i++) this.fliers.push(this.newFlier(r() * WIDTH));
     }
   }
@@ -32,7 +33,7 @@ export class Ambient {
       y: 90 + Math.random() * 220,
       v: dir * (40 + Math.random() * 50),
       phase: Math.random() * 10,
-      s: this.id === 'graveyard' ? 0.9 + Math.random() * 0.5 : 0.7 + Math.random() * 0.4,
+      s: this.id === 'night' ? 0.9 + Math.random() * 0.5 : 0.7 + Math.random() * 0.4,
       bob: Math.random() * 10,
     };
   }
@@ -41,7 +42,7 @@ export class Ambient {
     this.t += dt;
     const g = this.g;
     g.clear();
-    if (this.id === 'cliff') {
+    if (this.id === 'sky') {
       for (const c of this.clouds) {
         // clouds live between the cliffs and fade in / out at their edges
         c.x += c.v * dt;
@@ -50,11 +51,11 @@ export class Ambient {
         this.cloud(g, c.x, c.y, c.s, a);
       }
       for (const f of this.fliers) this.bird(g, f, dt);
-    } else if (this.id === 'graveyard') {
+    } else if (this.id === 'night') {
       for (const f of this.fliers) this.bat(g, f, dt);
       this.fog(g);
       this.lightning(dt);
-    } else {
+    } else if (this.id === 'torches') {
       this.torches(g, dt);
     }
   }

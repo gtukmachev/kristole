@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA_LEFT, ARENA_RIGHT, FIG, GROUND_Y, INK_FAINT, INK_SOFT } from './constants';
+import { ARENA_LEFT, ARENA_RIGHT, FIG, GROUND_Y, INK, INK_FAINT, INK_SOFT } from './constants';
 import { WEAPONS, type WeaponDef } from './data';
 import { drawFigure, ease, lerpPose, pose, type Pose } from './figure';
 import { sfx } from './sfx';
@@ -85,7 +85,9 @@ const STAND_LOW: [Pose, Pose][] = [[LOW_A, LOW_B], [LSPIN_A, LSPIN_B], [STAB_A, 
 /** Shield points spent per point of blocked damage (lvl-1 medium zombie: 2 blocks hold, the 3rd breaks). */
 const BLOCK_COST = 3.4;
 const SHIELD_REGEN_DELAY = 1.5;
-const SHIELD_REGEN = 25;
+const SHIELD_REGEN = 24;
+const SHIELD_REGEN_SLOW = 12;
+const SHIELD_REGEN_GUARD = 8;
 const FLIP_TIME = 0.5;
 
 export interface PlayerHost {
@@ -130,6 +132,8 @@ export class Player {
   private blockFlashUntil = 0;
   private flipT = 0;
   private flipUsed = false;
+  /** 0..1 how far the shield is unfolded. */
+  private guard = 0;
   private nextAttackAt = 0;
   private hurtUntil = 0;
   private invulnUntil = 0;
@@ -240,7 +244,10 @@ export class Player {
     }
     if (this.flipping) this.flipT += dt;
     // Shield regenerates after a short pause without blocking.
-    if (this.time - this.lastBlockAt > SHIELD_REGEN_DELAY) this.shield = Math.min(this.maxShield, this.shield + SHIELD_REGEN * dt);
+    // Shield always refills: slowly while guarding, faster after a pause without blocks.
+    const regen = this.blocking ? SHIELD_REGEN_GUARD : this.time - this.lastBlockAt > SHIELD_REGEN_DELAY ? SHIELD_REGEN : SHIELD_REGEN_SLOW;
+    this.shield = Math.min(this.maxShield, this.shield + regen * dt);
+    this.guard += ((this.blocking ? 1 : 0) - this.guard) * Math.min(1, dt * 12);
     if (onGround && !this.wasOnGround && !this.dead) {
       this.cur = { ...this.cur, lift: -4 };
       this.host.dustAt(this.x, this.footY, 8);
@@ -419,8 +426,29 @@ export class Player {
       time: this.time,
       vx: this.body.velocity.x,
       alpha: blink ? 0.35 : 1,
-      flash: this.time < this.blockFlashUntil,
+      weaponScale: 1 - this.guard,
     });
+    // The sword folds away and a curved shield unfolds up and down in front of the hands.
+    if (this.guard > 0.04) {
+      const k = ease.out(this.guard);
+      const R = 46 * FIG;
+      const span = 1.05 * k;
+      const cx = pts.hand.x - this.facing * R * 0.55;
+      const cy = pts.hand.y + 4;
+      const base = this.facing > 0 ? 0 : Math.PI;
+      const flash = this.time < this.blockFlashUntil;
+      g.lineStyle((flash ? 13 : 10) * FIG * k, INK, blink ? 0.35 : 1);
+      g.beginPath();
+      g.arc(cx, cy, R, base - span, base + span, false);
+      g.strokePath();
+      g.lineStyle(2.5, 0xffffff, 0.9 * k);
+      g.beginPath();
+      g.arc(cx, cy, R - 1, base - span * 0.8, base + span * 0.8, false);
+      g.strokePath();
+      // rim studs
+      g.fillStyle(0xffffff, k);
+      for (const a of [-0.6, 0, 0.6]) g.fillCircle(cx + Math.cos(base + a * span) * R, cy + Math.sin(base + a * span) * R, 2.2 * FIG);
+    }
     // Weapon swoosh.
     this.trail.clear();
     if (this.attack && this.attack.t > this.weapon.activeFrom * 0.8) {

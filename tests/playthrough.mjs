@@ -20,9 +20,19 @@ let lastLevel = -1, shots = 0, lastHp = 100;
 while (Date.now() - t0 < Number(process.env.LIMIT ?? 240) * 1000) {
   const s = await page.evaluate(() => window.__scene?.scene.isActive() ? window.__scene.snapshot() : null);
   if (!s) break;
-  if (s.level !== lastLevel) { console.log(`hp ${lastHp} | level ${s.level + 1} started at ${((Date.now() - t0) / 1000).toFixed(0)}s, score ${s.score}`); lastLevel = s.level; }
+  if (s.level !== lastLevel) { console.log(`hp ${lastHp} | level ${s.level + 1} (${s.place}) started at ${((Date.now() - t0) / 1000).toFixed(0)}s, score ${s.score}`); lastLevel = s.level; }
   if (s.level >= LEVELS) break;
   if (s.hp !== lastHp) { lastHp = s.hp; }
+  if (s.phase === 'exit') {
+    // walk into the open exit; capture the slide into the next place once
+    await page.keyboard.down('ArrowRight'); await sleep(300); await page.keyboard.up('ArrowRight');
+    if (!globalThis.slideShot) {
+      globalThis.slideShot = true;
+      await sleep(250);
+      await page.screenshot({ path: 'tests/shots/slide.png' });
+    }
+    continue;
+  }
   const alive = s.zombies.filter((z) => z.state !== 'dying' && z.state !== 'rising');
   if (!alive.length) { await sleep(100); continue; }
   alive.sort((a, b) => Math.abs(a.x - s.player.x) - Math.abs(b.x - s.player.x));

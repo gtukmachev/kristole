@@ -48,6 +48,25 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(28, 32, 7, 26);
     g.fillCircle(31.5, 58, 5);
     g.generateTexture('drop', 64, 64);
+    g.clear();
+    // health heart: red with an ink outline
+    const heart = (sc: number) => {
+      const pts: { x: number; y: number }[] = [];
+      for (let i = 0; i <= 40; i++) {
+        const t = (i / 40) * Math.PI * 2;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+        pts.push({ x: 22 + x * sc, y: 20 + y * sc });
+      }
+      return pts as unknown as Phaser.Math.Vector2[];
+    };
+    g.fillStyle(0xc4000c, 1);
+    g.fillPoints(heart(1.15), true);
+    g.lineStyle(3, 0x111111, 1);
+    g.strokePoints(heart(1.15), true);
+    g.lineStyle(3, 0xffffff, 0.8);
+    g.lineBetween(12, 12, 16, 9);
+    g.generateTexture('heart', 44, 42);
     g.destroy();
     void GROUND_Y;
 
@@ -57,7 +76,7 @@ export class BootScene extends Phaser.Scene {
     const chapter = Number(p.get('chapter') ?? 0);
     const level = Number(p.get('level') ?? 0);
     const weapon = p.get('weapon') === 'axe' ? 'axe' : 'sword';
-    if (target === 'game') this.scene.start('Game', { chapter, level, weapon });
+    if (target === 'game') this.scene.start('Game', { chapter, level, weapon, fromPlace: p.get('from') ?? undefined });
     else if (target === 'weapon') this.scene.start('Weapon', { chapter });
     else if (target === 'avatar') this.scene.start('Avatar');
     else if (target === 'leaderboard') this.scene.start('Leaderboard');

@@ -85,6 +85,8 @@ export interface FigureStyle {
   headless?: boolean;
   /** Zombie look: accessories differ per chapter. */
   variant?: ZombieVariant;
+  /** 0..1 – the weapon folds telescopically (used when the shield comes out). */
+  weaponScale?: number;
   /** Colour overrides (default: black ink on paper). */
   ink?: number;
   fill?: number;
@@ -231,7 +233,8 @@ export function drawFigure(
   if (style.weapon) {
     const d = worldDir(p.weapon, 1);
     tipW = { x: FH.x + d.x * wLen, y: FH.y + d.y * wLen };
-    drawWeapon(g, style.weapon, FH, d, scale, alpha);
+    const ws = style.weaponScale ?? 1;
+    if (ws > 0.06) drawWeapon(g, style.weapon, FH, d, scale, alpha * Math.min(1, ws * 2), INK, 0xffffff, ws);
   }
   if (isZombie) {
     // claw fingers
@@ -403,10 +406,10 @@ function drawHeadgear(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: n
 }
 
 /** Draws a weapon from the hand along unit direction d. */
-export function drawWeapon(g: Phaser.GameObjects.Graphics, weapon: WeaponId, hand: V, d: V, scale: number, alpha = 1, ink = INK, shine = 0xffffff) {
+export function drawWeapon(g: Phaser.GameObjects.Graphics, weapon: WeaponId, hand: V, d: V, scale: number, alpha = 1, ink = INK, shine = 0xffffff, lenScale = 1) {
   const n = { x: -d.y, y: d.x };
   if (weapon === 'sword') {
-    const len = WEAPON_LEN.sword * scale;
+    const len = WEAPON_LEN.sword * scale * lenScale;
     // grip behind the hand
     g.lineStyle(4 * scale, ink, alpha);
     g.lineBetween(hand.x - d.x * 8 * scale, hand.y - d.y * 8 * scale, hand.x, hand.y);
@@ -428,7 +431,7 @@ export function drawWeapon(g: Phaser.GameObjects.Graphics, weapon: WeaponId, han
     g.lineStyle(1.6 * scale, shine, alpha * 0.9);
     g.strokePoints(P(pts.slice(1, -1)), false);
   } else {
-    const len = WEAPON_LEN.axe * scale;
+    const len = WEAPON_LEN.axe * scale * lenScale;
     g.lineStyle(4.5 * scale, ink, alpha);
     g.lineBetween(hand.x - d.x * 10 * scale, hand.y - d.y * 10 * scale, hand.x + d.x * len, hand.y + d.y * len);
     // double-bladed head

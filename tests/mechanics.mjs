@@ -96,5 +96,12 @@ await page.keyboard.up('ArrowRight');
 const x1 = (await pState()).x;
 ok(fl.flipping, 'second jump in the air starts a flip');
 ok(x1 - x0 > 320, `flip carries further (moved ${x1 - x0}px)`);
+// v3: a heart heals when touched
+await page.goto(`http://localhost:${PORT}/?scene=game&chapter=0&level=0`);
+await sleep(600);
+await page.evaluate(() => { const sc = window.__scene; sc.player.hp = 40; sc.spawnHeart(sc.player.x, sc.player.footY - 60, false); });
+await sleep(300);
+const healed = await page.evaluate(() => window.__scene.player.hp);
+ok(healed === 65, `heart heals +25 (hp ${healed})`);
 console.log(errors.length ? 'ERRORS: ' + errors.join('\n') : 'no page errors');
 await browser.close(); server.kill();

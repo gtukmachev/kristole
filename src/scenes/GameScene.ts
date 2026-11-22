@@ -3,6 +3,8 @@ import {
   ARENA_LEFT, ARENA_RIGHT, BLOOD, FIG, BLOOD_DARK, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex,
 } from '../game/constants';
 import { CHAPTERS, buildLevel, type LevelDef, type ZombieSize } from '../game/data';
+import { PLACES, type PlaceDef, type PlaceId, type SpotKind } from '../game/places';
+import type { AmbientMode } from '../game/ambient';
 import { drawBackground } from '../game/background';
 import { Ambient } from '../game/ambient';
 import { Player, type PlayerHost, type PlayerInput, type Rect, type SwingKind } from '../game/Player';
@@ -18,9 +20,23 @@ export interface GameSceneData {
   score?: number;
   hp?: number;
   kills?: number;
+  /** Place the player just left: shown sliding away during the transition. */
+  fromPlace?: string;
 }
 
-type Phase = 'intro' | 'wave' | 'between' | 'cleared' | 'over';
+type Phase = 'enter' | 'intro' | 'wave' | 'between' | 'cleared' | 'exit' | 'over';
+
+const AMBIENT: Record<PlaceId, AmbientMode> = {
+  cliffFoot: 'sky', caveDoor: 'sky', caveInside: 'none', cliffPath: 'sky', summit: 'sky',
+  graveGates: 'night', crypts: 'night', chapel: 'night', openGraves: 'night', mausoleum: 'night',
+  moat: 'sky', courtyard: 'torches', armory: 'none', ramparts: 'sky', throne: 'none',
+};
+
+/** Size of the dark opening a zombie steps out of. */
+const SPOT_SIZE: Partial<Record<SpotKind, [number, number]>> = {
+  cave: [110, 160], door: [76, 120], crypt: [76, 120], coffin: [110, 30], barrel: [60, 80],
+  cabinet: [96, 186], armor: [60, 160], throne: [110, 200], mausoleum: [110, 170],
+};
 
 const overlap = (a: Rect, b: Rect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
@@ -67,6 +83,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private slowLeft = 0;
   private tipsSeen = new Set<string>();
   private tipText?: Phaser.GameObjects.Text;
+  private place!: PlaceDef;
+  private fromPlace?: string;
+  private hearts: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super('Game');
@@ -79,7 +98,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.score = data.score ?? 0;
     this.startHp = data.hp ?? 100;
     this.levelStartScore = this.score;
-    this.levelStartKills = this.kills;
+    this.levelStartKills = data.kills ?? 0;
+    this.fromPlace = data.fromPlace;
+    this.hearts = [];
     this.slowLeft = 0;
     this.zombies = [];
     this.splats = [];
@@ -95,17 +116,27 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   create() {
-    const ch = CHAPTERS[this.chapter];
+    this.place = PLACES[this.chapter][this.levelIdx];
     this.level = buildLevel(this.chapter, this.levelIdx);
     this.physics.world.setBounds(ARENA_LEFT, -400, ARENA_RIGHT - ARENA_LEFT, GROUND_Y + 400);
     this.physics.world.gravity.y = 2000;
     this.physics.world.timeScale = 1;
     this.tweens.timeScale = 1;
-    drawBackground(this, ch.bg);
-    this.ambient = new Ambient(this, ch.bg);
+    drawBackground(this, this.place);
+    this.ambient = new Ambient(this, AMBIENT[this.place.id]);
 
     const params = new URLSearchParams(window.location.search);
-    this.player = new Player(this, this, WIDTH / 2, this.weaponId, storage.getProfile());
+    this.player = new Player(this, this, this.fromPlace ? ARENA_LEFT + 40 : WIDTH / 2, this.weaponId, storage.getProfile());
+    // Ledges: one-way platforms you can jump onto from below.
+    for (const pl of this.place.platforms) {
+      const zone = this.add.zone(pl.x, pl.y + 6, pl.w, 12);
+      this.physics.add.existing(zone, true);
+      const b = zone.body as Phaser.Physics.Arcade.StaticBody;
+      b.checkCollision.down = false;
+      b.checkCollision.left = false;
+      b.checkCollision.right = false;
+      this.physics.add.collider(this.player.zone, zone);
+    }
     this.player.hp = this.startHp;
     this.player.god = params.has('god');
     if (params.has('debug')) this.debugG = this.add.graphics().setDepth(200);
@@ -154,20 +185,22 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     });
 
     sfx.playMusic('game');
-    this.startIntro();
+    this.spawnHeart(this.place.heart.x, this.place.heart.y, false);
+    if (this.fromPlace && this.textures.exists(`bg-${this.fromPlace}`)) this.slideIn(this.fromPlace);
+    else this.startIntro();
     (window as unknown as { __scene?: GameScene }).__scene = this;
   }
 
   private createHud() {
     const ch = CHAPTERS[this.chapter];
     const txt = (x: number, y: number, s: string, size: number, font = FONT_IMPACT) =>
-      this.add.text(x, y, s, { fontFamily: font, fontSize: `${size}px`, color: hex(INK) }).setDepth(100);
-    const hp = this.add.graphics().setDepth(100);
+      this.add.text(x, y, s, { fontFamily: font, fontSize: `${size}px`, color: hex(INK) }).setDepth(100).setScrollFactor(0);
+    const hp = this.add.graphics().setDepth(100).setScrollFactor(0);
     const name = storage.getProfile().name;
     txt(24, 14, name, 22);
-    const wIcon = this.add.graphics().setDepth(100);
+    const wIcon = this.add.graphics().setDepth(100).setScrollFactor(0);
     drawWeapon(wIcon, this.weaponId, { x: 286, y: 66 }, { x: 0.8, y: -0.6 }, 0.75);
-    const level = txt(WIDTH / 2, 14, `${ch.title}  ·  ${ch.name.toUpperCase()}  ·  LEVEL ${this.levelIdx + 1}/${ch.levels}`, 22).setOrigin(0.5, 0);
+    const level = txt(WIDTH / 2, 14, `${ch.title}  ·  LEVEL ${this.levelIdx + 1}/${ch.levels}  ·  ${this.place.name.toUpperCase()}`, 22).setOrigin(0.5, 0);
     const wave = txt(WIDTH / 2, 42, '', 20).setOrigin(0.5, 0).setColor(hex(INK_SOFT));
     const score = txt(WIDTH - 24, 12, '', 34).setOrigin(1, 0);
     const combo = txt(WIDTH - 24, 52, '', 24).setOrigin(1, 0);
@@ -196,8 +229,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private startIntro() {
     this.phase = 'intro';
     this.phaseT = 0;
-    const ch = CHAPTERS[this.chapter];
-    this.banner(`LEVEL ${this.levelIdx + 1}`, `${ch.title} — ${ch.name}`, 1500);
+    this.banner(`LEVEL ${this.levelIdx + 1}`, this.place.name, 1500);
   }
 
   private startWave() {
@@ -252,8 +284,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       swingLow: JD(k.s),
       block: k.a.isDown || k.d.isDown,
     };
-    if (this.phase === 'over') {
+    if (this.phase === 'over' || this.phase === 'enter') {
       input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
+      if (this.phase === 'enter') input.right = this.player.x < ARENA_LEFT + 200;
     }
     this.player.update(dt, input);
 
@@ -275,6 +308,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.checkTips();
     this.updateCombo(dt);
     this.updateHeads(dt);
+    this.updateHearts(dt);
     this.drawHud();
     if (this.debugG) this.drawDebug();
   }
@@ -351,7 +385,14 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         }
         break;
       case 'cleared':
-        if (this.phaseT > 3.0) this.goNext();
+        if (this.phaseT > 2.6) {
+          if (this.levelIdx < CHAPTERS[this.chapter].levels - 1) this.openExit();
+          else this.goNext();
+        }
+        break;
+      case 'exit':
+        // Walk into the opened exit to move on.
+        if (this.player.x > ARENA_RIGHT - 70 && !this.player.dead) this.goNext();
         break;
       case 'over':
         if (this.phaseT > 2.6) {
@@ -366,13 +407,64 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private pending = 0;
 
   private spawnZombie(size: ZombieSize) {
-    // Rise out of the ground somewhere not right on top of the player.
-    const margin = 60;
+    const e = this.place.entrance;
+    if (e === 'rise') return this.spawnRise(size, this.randomXAway());
+    if (e === 'parachute') {
+      // the giant is too heavy for a parachute
+      if (size === 'giant') return this.spawnRise(size, this.randomXAway());
+      const z = new Zombie(this, this, size, this.randomXAway(), this.level.strength, this.variantFor(), 'parachute', -40);
+      this.zombies.push(z);
+      return;
+    }
+    // spot / drop: use one of the place's spots, preferably away from the player
+    const spots = [...this.place.spots].sort((a, b) => Math.abs(b.x - this.player.x) - Math.abs(a.x - this.player.x));
+    const far = spots.filter((sp) => Math.abs(sp.x - this.player.x) > 200);
+    const spot = Phaser.Utils.Array.GetRandom(far.length ? far : spots.slice(0, 1));
+    if (spot.kind === 'edge') return this.spawnRise(size, spot.x);
+    if (e === 'drop') {
+      // a bit of dust falls first as a warning
+      for (let k = 0; k < 6; k++) this.dust.emitParticleAt(spot.x + Phaser.Math.Between(-20, 20), spot.y);
+      this.pending++;
+      this.time.delayedCall(500, () => {
+        this.pending--;
+        if (this.phase === 'over') return;
+        const z = new Zombie(this, this, size, spot.x + Phaser.Math.Between(-20, 20), this.level.strength, this.variantFor(), 'drop', spot.y);
+        this.zombies.push(z);
+      });
+      return;
+    }
+    // A door / coffin / barrel / cabinet opens, the zombie steps out of the dark.
+    const open = this.add.graphics().setDepth(9).setPosition(spot.x, GROUND_Y);
+    const [w, h] = SPOT_SIZE[spot.kind] ?? [80, 150];
+    open.fillStyle(0x1a1a1a, 1);
+    if (spot.kind === 'coffin') open.fillEllipse(0, -6, w, 30);
+    else open.fillRoundedRect(-w / 2, -h, w, h, { tl: w / 2, tr: w / 2, bl: 0, br: 0 });
+    open.setScale(0.1, 1);
+    this.tweens.add({ targets: open, scaleX: 1, duration: 300, ease: 'Cubic.Out' });
+    this.dust.explode(8, spot.x, GROUND_Y - 10);
+    sfx.door();
+    this.pending++;
+    this.time.delayedCall(380, () => {
+      this.pending--;
+      this.tweens.add({ targets: open, scaleX: 0.05, alpha: 0, delay: 900, duration: 300, onComplete: () => open.destroy() });
+      if (this.phase === 'over') return;
+      const z = new Zombie(this, this, size, spot.x, this.level.strength, this.variantFor(), 'emerge');
+      z.facing = this.player.x >= spot.x ? 1 : -1;
+      this.zombies.push(z);
+      if (size === 'giant') this.cameras.main.shake(400, 0.008);
+    });
+  }
+
+  private randomXAway() {
     let x = 0;
     for (let tries = 0; tries < 20; tries++) {
-      x = Phaser.Math.Between(ARENA_LEFT + margin, ARENA_RIGHT - margin);
+      x = Phaser.Math.Between(ARENA_LEFT + 60, ARENA_RIGHT - 60);
       if (Math.abs(x - this.player.x) > 260) break;
     }
+    return x;
+  }
+
+  private spawnRise(size: ZombieSize, x: number) {
     // The ground cracks first, so the player sees where a zombie will come out.
     const crack = this.add.graphics().setDepth(57).setPosition(x, 0);
     const w = size === 'giant' ? 70 : size === 'big' ? 50 : 34;
@@ -397,6 +489,74 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       this.dust.explode(18, x, GROUND_Y);
       this.cameras.main.shake(size === 'giant' ? 400 : 120, size === 'giant' ? 0.008 : 0.002);
     });
+  }
+
+  // ---- hearts (health pick-ups) ------------------------------------------
+
+  private spawnHeart(x: number, y: number, dropped: boolean) {
+    const h = this.add.image(x, y, 'heart').setDepth(18);
+    h.setData('born', this.time.now).setData('dropped', dropped).setData('baseY', y);
+    if (dropped) {
+      this.physics.add.existing(h);
+      const b = h.body as Phaser.Physics.Arcade.Body;
+      b.setCollideWorldBounds(true);
+      b.setBounce(0.4, 0.35);
+      b.setVelocity(Phaser.Math.Between(-80, 80), -360);
+      b.setDrag(80, 0);
+    }
+    this.hearts.push(h);
+  }
+
+  private updateHearts(_dt: number) {
+    const p = this.player;
+    for (const h of this.hearts) {
+      if (!h.active) continue;
+      const age = (this.time.now - (h.getData('born') as number)) / 1000;
+      if (!h.getData('dropped')) h.y = (h.getData('baseY') as number) + Math.sin(age * 3) * 5;
+      h.setScale(1 + Math.sin(age * 6) * 0.06);
+      if (h.getData('dropped') && age > 7) h.setAlpha(Math.floor(age * 8) % 2 ? 0.3 : 1);
+      if (h.getData('dropped') && age > 10) { h.destroy(); continue; }
+      const hb = p.hurtbox();
+      if (!p.dead && h.x > hb.left - 24 && h.x < hb.right + 24 && h.y > hb.top - 24 && h.y < hb.bottom + 10) {
+        const amount = 25;
+        p.heal(amount);
+        sfx.heal();
+        this.popText(h.x, h.y - 20, `+${amount} ♥`);
+        h.destroy();
+      }
+    }
+    this.hearts = this.hearts.filter((h) => h.active);
+  }
+
+  // ---- moving on to the next place -----------------------------------------
+
+  private openExit() {
+    this.phase = 'exit';
+    this.phaseT = 0;
+    const x = ARENA_RIGHT - 20;
+    const g = this.add.graphics();
+    g.fillStyle(0x1a1a1a, 1);
+    g.fillRoundedRect(-55, -175, 110, 175, { tl: 55, tr: 55, bl: 0, br: 0 });
+    g.lineStyle(5, INK, 1);
+    g.strokeRoundedRect(-55, -175, 110, 175, { tl: 55, tr: 55, bl: 0, br: 0 });
+    g.setScale(0.1, 1);
+    const arrow = this.add.text(-150, -120, 'GO  →', { fontFamily: FONT_IMPACT, fontSize: '54px', color: hex(INK) }).setOrigin(0.5);
+    this.add.container(x, GROUND_Y, [g, arrow]).setDepth(12);
+    this.tweens.add({ targets: g, scaleX: 1, duration: 500, ease: 'Cubic.Out' });
+    this.tweens.add({ targets: arrow, x: -120, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    sfx.door();
+    this.dust.explode(10, x, GROUND_Y - 10);
+  }
+
+  /** Camera slides from the previous place (left) to this one (right) while the player walks in. */
+  private slideIn(from: string) {
+    this.phase = 'enter';
+    this.phaseT = 0;
+    this.add.image(-WIDTH, 0, `bg-${from}`).setOrigin(0).setDepth(0);
+    this.add.image(-WIDTH, 0, 'ground').setOrigin(0).setDepth(50);
+    const cam = this.cameras.main;
+    cam.setScroll(-WIDTH, 0);
+    this.tweens.add({ targets: cam, scrollX: 0, duration: 1100, ease: 'Sine.InOut', onComplete: () => this.startIntro() });
   }
 
   private variantFor(): ZombieVariant {
@@ -430,7 +590,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         padding: { x: 16, y: 8 }, align: 'center',
       })
       .setOrigin(0.5)
-      .setDepth(110);
+      .setDepth(110)
+      .setScrollFactor(0);
     this.tipText = t;
     this.tweens.add({ targets: t, alpha: 0, delay: 3800, duration: 600, onComplete: () => t.destroy() });
   }
@@ -456,6 +617,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         score: this.score,
         hp: Math.min(100, this.player.hp + 35),
         kills: this.kills,
+        fromPlace: this.place.id,
       } satisfies GameSceneData);
     } else {
       storage.unlockChapter(this.chapter + 1);
@@ -512,6 +674,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const px = pts0 ? pts0.head.x : z.x;
     const py = pts0 ? pts0.head.y - 30 : z.footY - z.height;
     this.popText(px, py, mult > 1 ? `+${pts}  x${mult}` : `+${pts}`);
+    const dropChance = { small: 0.08, medium: 0.12, big: 0.35, giant: 1 }[z.size];
+    if (Math.random() < dropChance) this.spawnHeart(z.x, z.footY - z.height * 0.6, true);
     // A high swing knocks the head clean off (except the giant's – too thick).
     if (kind === 'high' && z.size !== 'giant' && pts0) {
       z.knockOffHead();
@@ -590,7 +754,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         .setTint(Math.random() < 0.6 ? BLOOD : BLOOD_DARK)
         .setScale(Phaser.Math.FloatBetween(0.7, 1.6))
         .setAngle(Phaser.Math.Between(-15, 15))
-        .setAlpha(0.9);
+        .setAlpha(0.9)
+        .setScrollFactor(0);
       this.tweens.add({ targets: d, y: py + Phaser.Math.Between(30, 90), scaleY: d.scaleY * 1.25, duration: 2600, ease: 'Sine.In' });
       this.tweens.add({ targets: d, alpha: 0, delay: 1400, duration: 1400, onComplete: () => d.destroy() });
     }
@@ -748,6 +913,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   snapshot() {
     return {
       phase: this.phase,
+      place: this.place.id,
       wave: this.waveIdx,
       level: this.levelIdx,
       chapter: this.chapter,
