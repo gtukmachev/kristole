@@ -1,0 +1,52 @@
+name: Release & deploy to GitHub Pages
+
+# A release is a semver tag (vX.Y.Z), created with `npm version patch|minor|major`
+# and pushed with `git push --follow-tags`. The tag is built, attached to a GitHub
+# Release and deployed to GitHub Pages. "Run workflow" redeploys a tag by hand.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the GitHub Release
+  pages: write      # deploy to Pages
+  id-token: write   # required by deploy-pages
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Zip the build for the release page
+        run: cd dist && zip -r ../kristole-${{ github.ref_name }}.zip .
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: kristole-${{ github.ref_name }}.zip
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

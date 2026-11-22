@@ -2,6 +2,8 @@
 
 2D zombie fighting game. Game design by **Leo T.** Ideas and sketches: [`idea/`](idea/idea.md).
 
+**Play:** https://gtukmachev.github.io/kristole/
+
 ## Run locally
 
 ```bash
@@ -10,6 +12,20 @@ npm run dev        # open http://localhost:5173
 ```
 
 Production build (static files in `dist/`, ready for GitHub Pages later): `npm run build`, preview with `npm run preview`.
+
+## Releases & deploy
+
+- `main` is the working branch. Every push / pull request runs **CI** (typecheck + build), nothing is deployed.
+- A **release** is a semver tag `vX.Y.Z`. Pushing a tag builds the game, creates a GitHub Release (notes generated
+  from commits, build zip attached) and deploys it to GitHub Pages.
+
+```bash
+npm version patch        # or minor / major: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags   # pushes main + the tag -> release + deploy
+```
+
+Patch = fixes, minor = new features / levels, major = big changes. The version is shown in the main menu.
+To redeploy a release by hand: Actions → "Release & deploy to GitHub Pages" → Run workflow (pick the tag).
 
 ## Controls
 

@@ -160,7 +160,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setName('credit');
     this.add.text(24 + 166, HEIGHT - 34, 'LEO T.', { fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '18px', fontStyle: 'bold italic', color: hex(MENU_WHITE) });
-    this.add.text(WIDTH - 24, HEIGHT - 34, 'M — sound on/off', { fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '14px', color: '#666666' }).setOrigin(1, 0);
+    this.add.text(WIDTH - 24, HEIGHT - 34, `M — sound on/off   ·   v${__APP_VERSION__}`, { fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '14px', color: '#666666' }).setOrigin(1, 0);
 
     this.toast = this.add.text(WIDTH / 2, row2y + 80, '', { fontFamily: FONT_SLAB, fontSize: '22px', color: hex(MENU_PALE) }).setOrigin(0.5).setAlpha(0);
 
