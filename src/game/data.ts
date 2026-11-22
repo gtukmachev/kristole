@@ -34,7 +34,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   sword: {
     id: 'sword',
     name: 'SWORD',
-    range: 118,
+    range: 106,
     damage: 20,
     swingMs: 300,
     activeFrom: 0.3,

@@ -146,7 +146,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const name = storage.getProfile().name;
     txt(24, 14, name, 22);
     const wIcon = this.add.graphics().setDepth(100);
-    drawWeapon(wIcon, this.weaponId, { x: 300, y: 58 }, { x: 0.8, y: -0.6 }, 0.5);
+    drawWeapon(wIcon, this.weaponId, { x: 286, y: 66 }, { x: 0.8, y: -0.6 }, 0.75);
     const level = txt(WIDTH / 2, 14, `${ch.title}  ·  ${ch.name.toUpperCase()}  ·  LEVEL ${this.levelIdx + 1}/${ch.levels}`, 22).setOrigin(0.5, 0);
     const wave = txt(WIDTH / 2, 42, '', 20).setOrigin(0.5, 0).setColor(hex(INK_SOFT));
     const score = txt(WIDTH - 24, 12, '', 34).setOrigin(1, 0);
@@ -236,12 +236,34 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       });
     }
     for (const z of [...this.zombies]) z.update(dt, this.player);
+    this.separatePlayer();
 
     this.updateWaves(dt);
     this.updateCombo(dt);
     this.updateHeads(dt);
     this.drawHud();
     if (this.debugG) this.drawDebug();
+  }
+
+  /** The player can't walk through zombies – jump over them instead. */
+  private separatePlayer() {
+    const p = this.player;
+    if (p.dead) return;
+    const pr = p.hurtbox();
+    for (const z of this.zombies) {
+      if (!z.alive || z.state === 'rising') continue;
+      const zr = z.hurtbox();
+      if (pr.bottom < zr.top + 18) continue; // above it: jumping over
+      const minDist = (pr.right - pr.left) / 2 + ((zr.right - zr.left) / 2) * 0.7;
+      const dx = p.x - z.x;
+      const overlapX = minDist - Math.abs(dx);
+      if (overlapX <= 0) continue;
+      const dir = dx === 0 ? -z.facing : Math.sign(dx);
+      const before = p.zone.x;
+      p.zone.x = Phaser.Math.Clamp(p.zone.x + dir * overlapX, ARENA_LEFT + (pr.right - pr.left) / 2, ARENA_RIGHT - (pr.right - pr.left) / 2);
+      const moved = Math.abs(p.zone.x - before);
+      if (moved < overlapX - 0.5) z.zone.x -= dir * (overlapX - moved); // pinned to a wall: shove the zombie
+    }
   }
 
   private updateWaves(dt: number) {
@@ -502,7 +524,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const frac = this.player.hp / this.player.maxHp;
     hp.fillStyle(0xffffff, 1);
     hp.fillRect(x, y, w, h);
-    hp.fillStyle(INK, 1);
+    // pulse when low on health
+    const low = frac < 0.3 && !this.player.dead;
+    hp.fillStyle(low && Math.floor(this.time.now / 250) % 2 ? BLOOD : INK, 1);
     hp.fillRect(x, y, w * frac, h);
     // hatch the empty part so it reads clearly in B&W
     hp.lineStyle(1, INK, 0.35);
@@ -551,6 +575,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       hp: this.player.hp,
       score: this.score,
       zombies: this.zombies.map((z) => ({ size: z.size, state: z.state, x: Math.round(z.x), hp: z.hp })),
+      kills: this.kills,
       queue: this.spawnQueue.length,
       player: { x: Math.round(this.player.x), y: Math.round(this.player.footY), crouch: this.player.crouching, facing: this.player.facing > 0 },
     };

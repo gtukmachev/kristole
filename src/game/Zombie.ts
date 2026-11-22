@@ -49,6 +49,9 @@ export class Zombie {
   private flashUntil = 0;
   private groanAt = 2 + Math.random() * 6;
   private killedBy: SwingKind | null = null;
+  private poiseUntil = 0;
+  private lungeUntil = 0;
+  private lungeCooldown = 1 + Math.random() * 2;
 
   constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number) {
     this.def = ZOMBIES[size];
@@ -102,9 +105,11 @@ export class Zombie {
       this.body.setVelocity(dirX * knockback * 1.1, -180);
       return true;
     }
-    const staggers = !this.def.heavy || kind === 'high';
+    // After a stagger a zombie keeps pushing forward for a moment (poise), so spamming one button isn't enough.
+    const staggers = (!this.def.heavy || kind === 'high') && this.time >= this.poiseUntil;
     if (staggers && this.state !== 'rising') {
       this.setState('hurt');
+      this.poiseUntil = this.time + 0.3 + 0.7;
       this.body.setVelocityX(dirX * knockback / (this.def.heavy ? 2 : 1));
     }
     return false;
@@ -148,7 +153,15 @@ export class Zombie {
           this.setState('windup');
           sfx.zombieAttack();
         } else {
-          const sp = player.dead ? this.speed * 0.3 : this.speed * (this.blocked ? 0.15 : 1);
+          // Occasional lunge to close the distance (not the heavy ones).
+          this.lungeCooldown -= dt;
+          const near = dist < d.reach * FIG + 230 && dist > d.reach * FIG + 40;
+          if (!d.heavy && near && this.lungeCooldown <= 0 && !this.blocked) {
+            this.lungeUntil = this.time + 0.4;
+            this.lungeCooldown = 2.5 + Math.random() * 3;
+          }
+          const lunge = this.time < this.lungeUntil ? 2.6 : 1;
+          const sp = player.dead ? this.speed * 0.3 : this.speed * lunge * (this.blocked ? 0.15 : 1);
           this.body.setVelocityX(this.facing * sp);
         }
         this.groanAt -= dt;
