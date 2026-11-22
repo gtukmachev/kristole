@@ -64,18 +64,6 @@ function paper(g: G, rand: () => number) {
   }
 }
 
-function birds(g: G, rand: () => number, n: number) {
-  g.lineStyle(2, INK_SOFT, 0.8);
-  for (let i = 0; i < n; i++) {
-    const x = 300 + rand() * 700, y = 80 + rand() * 140, s = 6 + rand() * 6;
-    g.beginPath();
-    g.moveTo(x - s, y - s * 0.4);
-    g.lineTo(x, y);
-    g.lineTo(x + s, y - s * 0.4);
-    g.strokePath();
-  }
-}
-
 function cliff(g: G) {
   const rand = rng(7);
   paper(g, rand);
@@ -91,7 +79,6 @@ function cliff(g: G) {
   for (let x = 0; x <= WIDTH; x += 60) near.push({ x, y: 470 + Math.sin(x * 0.006 + 1) * 35 + rand() * 20 });
   g.lineStyle(2.5, INK_SOFT, 0.7);
   g.strokePoints(P(near), false);
-  birds(g, rand, 4);
   // the big cliff on the left, like in the sketch
   const cliffPts = [
     { x: 0, y: 0 },
@@ -245,18 +232,6 @@ function castle(g: G) {
     g.lineBetween(x, 488, x + 4, 446);
     g.fillStyle(INK, 1);
     g.fillEllipse(x + 4, 444, 14, 8);
-    g.fillStyle(PAPER, 1);
-    g.fillEllipse(x + 4, 430, 18, 26);
-    g.lineStyle(2.5, INK, 1);
-    g.beginPath();
-    g.moveTo(x - 5, 440);
-    g.lineTo(x - 7, 428);
-    g.lineTo(x - 1, 432);
-    g.lineTo(x + 3, 412);
-    g.lineTo(x + 7, 428);
-    g.lineTo(x + 11, 424);
-    g.lineTo(x + 13, 440);
-    g.strokePath();
   }
   // banners
   for (const x of [480, 800]) {

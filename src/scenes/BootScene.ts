@@ -36,6 +36,18 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xc4000c, 1);
     g.fillEllipse(c - 1, c + r - 1, 10, 4);
     g.generateTexture('zhead', 26, 26);
+    g.clear();
+    // blood drop on the 'camera lens'
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(32, 32, 18);
+    g.fillCircle(52, 24, 7);
+    g.fillCircle(14, 46, 6);
+    g.fillCircle(44, 52, 5);
+    g.fillCircle(58, 44, 3);
+    g.fillCircle(8, 20, 3);
+    g.fillRect(28, 32, 7, 26);
+    g.fillCircle(31.5, 58, 5);
+    g.generateTexture('drop', 64, 64);
     g.destroy();
     void GROUND_Y;
 

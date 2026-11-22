@@ -288,6 +288,13 @@ class Sfx {
     if (this.intensity > 0.75 && step % 4 === 2) this.mnote(t, 440 * (step === 2 ? 1 : 1.19), 0.12, 'square', 0.025, 1800);
   }
 
+  thunder() {
+    const t = this.now();
+    if (!t) return;
+    this.noise(t, 2.2, 'lowpass', 300, 60, 0.6, 0.7);
+    this.noise(t + 0.1, 1.4, 'lowpass', 900, 100, 0.25);
+  }
+
   click() {
     const t = this.now();
     if (!t) return;

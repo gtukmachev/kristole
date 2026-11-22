@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA_LEFT, ARENA_RIGHT, FIG, GROUND_Y, INK_FAINT } from './constants';
+import { ARENA_LEFT, ARENA_RIGHT, FIG, GROUND_Y, INK_FAINT, INK_SOFT } from './constants';
 import { WEAPONS, type WeaponDef } from './data';
 import { drawFigure, ease, lerpPose, pose, type Pose } from './figure';
 import { sfx } from './sfx';
@@ -80,7 +80,7 @@ export class Player {
   private lastGroundAt = 0;
   private jumpBufferedAt = -1;
   private deadT = 0;
-  private trailPts: { x: number; y: number; t: number }[] = [];
+  private trailPts: { x: number; y: number; hx: number; hy: number; t: number }[] = [];
   private wasOnGround = true;
 
   constructor(scene: Phaser.Scene, private host: PlayerHost, x: number, weapon: WeaponId, private profile: Profile) {
@@ -289,16 +289,29 @@ export class Player {
     // Weapon swoosh.
     this.trail.clear();
     if (this.attack && this.attack.t > this.weapon.activeFrom * 0.8) {
-      this.trailPts.push({ x: pts.tip.x, y: pts.tip.y, t: this.time });
+      this.trailPts.push({ x: pts.tip.x, y: pts.tip.y, hx: pts.hand.x, hy: pts.hand.y, t: this.time });
     }
-    this.trailPts = this.trailPts.filter((p) => this.time - p.t < 0.12);
+    this.trailPts = this.trailPts.filter((p) => this.time - p.t < 0.14);
     if (this.trailPts.length > 1) {
-      for (let i = 1; i < this.trailPts.length; i++) {
+      // Brush smear: fill the area the blade swept, from the hand out to the tip, fading out.
+      const n = this.trailPts.length;
+      for (let i = 1; i < n; i++) {
         const a = this.trailPts[i - 1], b = this.trailPts[i];
-        const k = i / this.trailPts.length;
-        this.trail.lineStyle(10 * k + 2, INK_FAINT, 0.7 * k);
-        this.trail.lineBetween(a.x, a.y, b.x, b.y);
+        const k = i / n;
+        // only the outer part of the blade, so the smear looks like an arc
+        const inner = 0.45;
+        const ax = a.hx + (a.x - a.hx) * inner, ay = a.hy + (a.y - a.hy) * inner;
+        const bx = b.hx + (b.x - b.hx) * inner, by = b.hy + (b.y - b.hy) * inner;
+        this.trail.fillStyle(INK_FAINT, 0.55 * k);
+        this.trail.fillPoints([{ x: ax, y: ay }, { x: a.x, y: a.y }, { x: b.x, y: b.y }, { x: bx, y: by }] as unknown as Phaser.Math.Vector2[], true);
       }
+      const last = this.trailPts[n - 1];
+      this.trail.lineStyle(3, INK_SOFT, 0.6);
+      this.trail.beginPath();
+      this.trail.moveTo(this.trailPts[0].x, this.trailPts[0].y);
+      for (const p of this.trailPts) this.trail.lineTo(p.x, p.y);
+      this.trail.lineTo(last.x, last.y);
+      this.trail.strokePath();
     }
   }
 

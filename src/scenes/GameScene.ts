@@ -4,6 +4,7 @@ import {
 } from '../game/constants';
 import { CHAPTERS, buildLevel, type LevelDef, type ZombieSize } from '../game/data';
 import { drawBackground } from '../game/background';
+import { Ambient } from '../game/ambient';
 import { Player, type PlayerHost, type PlayerInput, type Rect, type SwingKind } from '../game/Player';
 import { Zombie, type ZombieHost } from '../game/Zombie';
 import { sfx } from '../game/sfx';
@@ -59,6 +60,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   };
   private debugG?: Phaser.GameObjects.Graphics;
   private hitStop = 0;
+  private ambient!: Ambient;
   private startHp = 100;
   private levelStartScore = 0;
   private levelStartKills = 0;
@@ -100,6 +102,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.physics.world.timeScale = 1;
     this.tweens.timeScale = 1;
     drawBackground(this, ch.bg);
+    this.ambient = new Ambient(this, ch.bg);
 
     const params = new URLSearchParams(window.location.search);
     this.player = new Player(this, this, WIDTH / 2, this.weaponId, storage.getProfile());
@@ -265,6 +268,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     for (const z of [...this.zombies]) z.update(dt, this.player);
     this.separatePlayer();
 
+    this.ambient.update(dt);
     this.updateWaves(dt);
     this.checkTips();
     this.updateCombo(dt);
@@ -470,6 +474,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const hx = player.facing > 0 ? hb.left + 4 : hb.right - 4;
       const big = z.size === 'big' || z.size === 'giant';
       this.spill(hx, Math.max(hy, box.top), player.facing, killed ? 34 : 14);
+      this.impact(hx, Math.max(hy, box.top), killed || w.id === 'axe' ? 1.3 : 1);
+      if (killed && (big || Math.random() < 0.25)) this.lensBlood(big ? 4 : 1);
       sfx.hit(w.id === 'axe');
       this.cameras.main.shake(killed ? 140 : 70, killed ? 0.006 : 0.003);
       this.freeze(killed ? 0.07 : 0.035);
@@ -508,6 +514,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       this.spill(this.player.x, hb.top + 30, z.facing, 18);
       this.cameras.main.shake(160, 0.007);
       this.cameras.main.flash(90, 196, 0, 12, false);
+      this.lensBlood(2);
       this.combo = 0;
       this.comboTimer = 0;
     }
@@ -533,6 +540,40 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   // ---- juice ------------------------------------------------------------
+
+  /** Comic-style ink impact lines. */
+  private impact(x: number, y: number, s: number) {
+    const g = this.add.graphics().setDepth(40).setPosition(x, y);
+    const n = 9;
+    const rot = Math.random() * Math.PI;
+    g.lineStyle(4, INK, 1);
+    for (let i = 0; i < n; i++) {
+      const a = rot + (i / n) * Math.PI * 2;
+      const r0 = 14 + (i % 2) * 6, r1 = r0 + 16 + (i % 3) * 8;
+      g.lineBetween(Math.cos(a) * r0, Math.sin(a) * r0, Math.cos(a) * r1, Math.sin(a) * r1);
+    }
+    g.setScale(0.5 * s);
+    this.tweens.add({ targets: g, scale: 1.25 * s, alpha: 0, duration: 180, ease: 'Cubic.Out', onComplete: () => g.destroy() });
+  }
+
+  /** Blood splashed on the 'camera lens' – drips down and fades. */
+  private lensBlood(n: number) {
+    for (let i = 0; i < n; i++) {
+      const edge = Math.random();
+      const x = edge < 0.5 ? Phaser.Math.Between(20, 260) * (Math.random() < 0.5 ? 1 : -1) : Phaser.Math.Between(80, WIDTH - 80);
+      const px = x < 0 ? WIDTH + x : x;
+      const py = edge < 0.5 ? Phaser.Math.Between(100, HEIGHT - 200) : Phaser.Math.Between(90, 260);
+      const d = this.add
+        .image(px, py, 'drop')
+        .setDepth(120)
+        .setTint(Math.random() < 0.6 ? BLOOD : BLOOD_DARK)
+        .setScale(Phaser.Math.FloatBetween(0.7, 1.6))
+        .setAngle(Phaser.Math.Between(-15, 15))
+        .setAlpha(0.9);
+      this.tweens.add({ targets: d, y: py + Phaser.Math.Between(30, 90), scaleY: d.scaleY * 1.25, duration: 2600, ease: 'Sine.In' });
+      this.tweens.add({ targets: d, alpha: 0, delay: 1400, duration: 1400, onComplete: () => d.destroy() });
+    }
+  }
 
   private freeze(sec: number) {
     if (this.hitStop > 0) return;

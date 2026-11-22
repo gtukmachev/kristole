@@ -23,6 +23,10 @@ const LETTERS: Seg[][] = [
   [[22, 10, 26, 150], [8, 16, 102, 10], [14, 80, 98, 84], [14, 146, 102, 150]], // E
 ];
 
+type Stroke = { x1: number; y1: number; x2: number; y2: number; w: number; a: number };
+let logoAnimated = false;
+
+/** KRISTOLE in chalky strokes. The first time per visit it is "drawn" stroke by stroke. */
 export function drawLogo(scene: Phaser.Scene, cx: number, top: number, scale: number, color = MENU_ORANGE) {
   const g = scene.add.graphics();
   const spacing = 210 * scale;
@@ -32,23 +36,52 @@ export function drawLogo(scene: Phaser.Scene, cx: number, top: number, scale: nu
     seed = (seed * 16807) % 2147483647;
     return seed / 2147483647;
   };
-  LETTERS.forEach((segs, i) => {
+  // each segment = 3 rough passes
+  const segs: Stroke[][] = [];
+  LETTERS.forEach((letter, i) => {
     const ox = startX + i * spacing;
-    for (const [x1, y1, x2, y2] of segs) {
+    for (const [x1, y1, x2, y2] of letter) {
+      const passes: Stroke[] = [];
       for (let pass = 0; pass < 3; pass++) {
         const j = () => (rand() - 0.5) * 5;
         const dx = x2 - x1, dy = y2 - y1;
         const ext = 0.04 + rand() * 0.04; // chalk overshoot
-        g.lineStyle(pass === 0 ? 7 * scale * 1.6 : 3.5 * scale * 1.6, color, pass === 0 ? 0.95 : 0.6);
-        g.lineBetween(
-          ox + (x1 - dx * ext) * scale + j(),
-          top + (y1 - dy * ext) * scale + j(),
-          ox + (x2 + dx * ext) * scale + j(),
-          top + (y2 + dy * ext) * scale + j(),
-        );
+        passes.push({
+          x1: ox + (x1 - dx * ext) * scale + j(),
+          y1: top + (y1 - dy * ext) * scale + j(),
+          x2: ox + (x2 + dx * ext) * scale + j(),
+          y2: top + (y2 + dy * ext) * scale + j(),
+          w: pass === 0 ? 7 * scale * 1.6 : 3.5 * scale * 1.6,
+          a: pass === 0 ? 0.95 : 0.6,
+        });
       }
+      segs.push(passes);
     }
   });
+  const render = (progress: number) => {
+    g.clear();
+    const total = segs.length * progress;
+    segs.forEach((passes, i) => {
+      const k = Phaser.Math.Clamp(total - i, 0, 1);
+      if (k <= 0) return;
+      for (const st of passes) {
+        g.lineStyle(st.w, color, st.a);
+        g.lineBetween(st.x1, st.y1, st.x1 + (st.x2 - st.x1) * k, st.y1 + (st.y2 - st.y1) * k);
+      }
+    });
+  };
+  if (logoAnimated) {
+    render(1);
+  } else {
+    logoAnimated = true;
+    render(0);
+    const state = { p: 0 };
+    scene.tweens.add({
+      targets: state, p: 1, duration: 1600, ease: 'Sine.InOut',
+      onUpdate: () => render(state.p),
+      onComplete: () => render(1),
+    });
+  }
   return g;
 }
 
@@ -95,9 +128,7 @@ export class MenuScene extends Phaser.Scene {
       phase: Math.random() * 10,
       seed: i + 3,
     }));
-    const logo = drawLogo(this, WIDTH / 2, 38, 0.66);
-    logo.setAlpha(0);
-    this.tweens.add({ targets: logo, alpha: 1, duration: 600 });
+    drawLogo(this, WIDTH / 2, 38, 0.66);
 
     const bw = 300, bh = 108, gap = 28;
     const row1y = 255, row2y = 392;
