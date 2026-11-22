@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FIG, GROUND_Y } from './constants';
 import { ZOMBIES, type ZombieDef, type ZombieSize } from './data';
-import { drawFigure, ease, lerpPose, pose, BONES, type FigurePoints, type Pose } from './figure';
+import { drawFigure, ease, lerpPose, pose, BONES, type FigurePoints, type Pose, type ZombieVariant } from './figure';
 import type { Player, Rect, SwingKind } from './Player';
 import { sfx } from './sfx';
 
@@ -53,7 +53,7 @@ export class Zombie {
   private lungeUntil = 0;
   private lungeCooldown = 1 + Math.random() * 2;
 
-  constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number) {
+  constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number, readonly variant: ZombieVariant = 'plain') {
     this.def = ZOMBIES[size];
     this.scale = this.def.scale * FIG * (0.95 + Math.random() * 0.1);
     this.maxHp = Math.round(this.def.hp * strength);
@@ -278,6 +278,7 @@ export class Zombie {
       alpha,
       flash: this.time < this.flashUntil,
       headless: this.headless,
+      variant: this.variant,
     });
     if (this.state === 'windup' && this.stateT > 0.08) {
       // Teach the player what to do: arrow above the head (↓ = duck, ↑ = jump).

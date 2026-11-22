@@ -17,7 +17,7 @@ await sleep(1500);
 const hold = async (k, ms) => { await page.keyboard.down(k); await sleep(ms); await page.keyboard.up(k); };
 const t0 = Date.now();
 let lastLevel = -1, shots = 0, lastHp = 100;
-while (Date.now() - t0 < 240000) {
+while (Date.now() - t0 < Number(process.env.LIMIT ?? 240) * 1000) {
   const s = await page.evaluate(() => window.__scene?.scene.isActive() ? window.__scene.snapshot() : null);
   if (!s) break;
   if (s.level !== lastLevel) { console.log(`hp ${lastHp} | level ${s.level + 1} started at ${((Date.now() - t0) / 1000).toFixed(0)}s, score ${s.score}`); lastLevel = s.level; }

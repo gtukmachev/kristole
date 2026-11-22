@@ -35,12 +35,16 @@ Menus also work with the mouse.
 - Points for every zombie, combo multiplier for quick kills, bonus for each level.
 - 3 chapters × 5 levels: The Cliff, The Graveyard, The Castle. Finishing a chapter unlocks the next one.
 - Leaderboard, avatar name and progress are stored in the browser (localStorage).
+- Chapter one shows short beginner tips (once). Zombies dress differently per chapter.
 
 ## Tech
 
 Phaser 4 + TypeScript + Vite. All graphics are drawn in code (procedural stick-figure animation), all sounds are synthesised
 with Web Audio – there are no asset files.
 
-Test helpers: `node tests/smoke.mjs` (screenshots of every screen into `tests/shots/`),
-`node tests/playthrough.mjs [levels] [chapter]` (a bot plays in god mode).
+Test helpers (Playwright, start their own dev server):
+- `node tests/smoke.mjs` – screenshots of every screen into `tests/shots/`, fails on page errors
+- `node tests/mechanics.mjs` – wall jump, crouch, pause / resume / restart
+- `node tests/playthrough.mjs [levels] [chapter]` – a bot plays (`GOD=1` no damage, `SMART=1` bot ducks and jumps)
+- `node tests/variants.mjs` – screenshots of every chapter + beginner tip
 URL shortcuts: `?scene=game&chapter=1&level=2&weapon=axe`, `&god=1` (no damage), `&debug=1` (hitboxes).

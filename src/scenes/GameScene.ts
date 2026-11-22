@@ -8,7 +8,7 @@ import { Player, type PlayerHost, type PlayerInput, type Rect, type SwingKind } 
 import { Zombie, type ZombieHost } from '../game/Zombie';
 import { sfx } from '../game/sfx';
 import { storage, type WeaponId } from '../game/storage';
-import { drawWeapon } from '../game/figure';
+import { drawWeapon, type ZombieVariant } from '../game/figure';
 
 export interface GameSceneData {
   chapter: number;
@@ -16,6 +16,7 @@ export interface GameSceneData {
   weapon: WeaponId;
   score?: number;
   hp?: number;
+  kills?: number;
 }
 
 type Phase = 'intro' | 'wave' | 'between' | 'cleared' | 'over';
@@ -59,6 +60,10 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private hitStop = 0;
   private startHp = 100;
   private levelStartScore = 0;
+  private levelStartKills = 0;
+  private slowLeft = 0;
+  private tipsSeen = new Set<string>();
+  private tipText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('Game');
@@ -71,13 +76,15 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.score = data.score ?? 0;
     this.startHp = data.hp ?? 100;
     this.levelStartScore = this.score;
+    this.levelStartKills = this.kills;
+    this.slowLeft = 0;
     this.zombies = [];
     this.splats = [];
     this.heads = [];
     this.waveIdx = 0;
     this.combo = 0;
     this.comboTimer = 0;
-    this.kills = 0;
+    this.kills = data.kills ?? 0;
     this.hitStop = 0;
     this.phase = 'intro';
     this.phaseT = 0;
@@ -89,6 +96,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.level = buildLevel(this.chapter, this.levelIdx);
     this.physics.world.setBounds(ARENA_LEFT, -400, ARENA_RIGHT - ARENA_LEFT, GROUND_Y + 400);
     this.physics.world.gravity.y = 2000;
+    this.physics.world.timeScale = 1;
+    this.tweens.timeScale = 1;
     drawBackground(this, ch.bg);
 
     const params = new URLSearchParams(window.location.search);
@@ -198,7 +207,15 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   update(_time: number, deltaMs: number) {
-    const dt = Math.min(deltaMs, 50) / 1000;
+    const realDt = Math.min(deltaMs, 50) / 1000;
+    let dt = realDt;
+    if (this.slowLeft > 0) {
+      this.slowLeft -= realDt;
+      const f = this.slowLeft > 0 ? 0.3 : 1;
+      dt *= f;
+      this.physics.world.timeScale = 1 / f;
+      this.tweens.timeScale = f;
+    }
     const k = this.keys;
     const JD = Phaser.Input.Keyboard.JustDown;
 
@@ -242,6 +259,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.separatePlayer();
 
     this.updateWaves(dt);
+    this.checkTips();
     this.updateCombo(dt);
     this.updateHeads(dt);
     this.drawHud();
@@ -341,12 +359,48 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       this.pending--;
       this.tweens.add({ targets: crack, alpha: 0, delay: 1200, duration: 800, onComplete: () => crack.destroy() });
       if (this.phase === 'over') return;
-      const z = new Zombie(this, this, size, x, this.level.strength);
+      const z = new Zombie(this, this, size, x, this.level.strength, this.variantFor());
       z.facing = this.player.x >= x ? 1 : -1;
       this.zombies.push(z);
       this.dust.explode(18, x, GROUND_Y);
       this.cameras.main.shake(size === 'giant' ? 400 : 120, size === 'giant' ? 0.008 : 0.002);
     });
+  }
+
+  private variantFor(): ZombieVariant {
+    const r = Math.random();
+    if (this.chapter === 0) return r < 0.25 ? 'bandage' : 'plain';
+    if (this.chapter === 1) return r < 0.35 ? 'tophat' : r < 0.55 ? 'bandage' : 'plain';
+    return r < 0.6 ? 'helmet' : r < 0.75 ? 'bandage' : 'plain';
+  }
+
+  /** Short beginner tips in chapter one, each shown once per browser. */
+  private tip(id: string, text: string) {
+    if (this.chapter !== 0 || this.tipsSeen.has(id)) return;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(window.localStorage.getItem('kristole.tips') ?? '[]');
+    } catch {
+      /* ignore */
+    }
+    this.tipsSeen.add(id);
+    if (seen.includes(id)) return;
+    seen.push(id);
+    try {
+      window.localStorage.setItem('kristole.tips', JSON.stringify(seen));
+    } catch {
+      /* ignore */
+    }
+    this.tipText?.destroy();
+    const t = this.add
+      .text(WIDTH / 2, 110, text, {
+        fontFamily: FONT_HAND, fontSize: '28px', color: hex(INK), backgroundColor: '#ffffff',
+        padding: { x: 16, y: 8 }, align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(110);
+    this.tipText = t;
+    this.tweens.add({ targets: t, alpha: 0, delay: 3800, duration: 600, onComplete: () => t.destroy() });
   }
 
   private levelCleared() {
@@ -369,6 +423,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         weapon: this.weaponId,
         score: this.score,
         hp: Math.min(100, this.player.hp + 35),
+        kills: this.kills,
       } satisfies GameSceneData);
     } else {
       storage.unlockChapter(this.chapter + 1);
@@ -411,6 +466,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private onKill(z: Zombie, kind: SwingKind, big: boolean) {
     this.kills++;
+    const lastOne = this.phase === 'wave' && this.waveIdx === this.level.waves.length - 1 && !this.spawnQueue.length && this.pending === 0 && this.zombies.filter((o) => o.alive).length === 0;
+    if (lastOne || z.size === 'giant') this.slowLeft = 0.9;
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 2.5;
     const mult = Math.min(this.combo, 5);
@@ -453,6 +510,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.phaseT = 0;
     sfx.playMusic(null);
     sfx.gameOver();
+    this.slowLeft = 1.2;
     this.spill(this.player.x, this.player.footY - 60, 0, 50);
     this.banner('YOU DIED', `Score ${this.score}`, 2200);
   }
@@ -532,6 +590,17 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.tweens.add({ targets: t, y: y - 50, alpha: 0, duration: 900, ease: 'Cubic.Out', onComplete: () => t.destroy() });
   }
 
+  private checkTips() {
+    if (this.chapter !== 0) return;
+    for (const z of this.zombies) {
+      if (z.state !== 'windup') continue;
+      if (z.size === 'small') this.tip('jump', 'Small zombies bite your legs — JUMP (↑)!\nOnly a DOWN swing (S) reaches them.');
+      else this.tip('duck', 'This one swings high — DUCK (hold ↓)!\nYou can swing while ducking.');
+    }
+    if (this.zombies.some((z) => z.size === 'giant' && z.state === 'walk')) this.tip('giant', 'A GIANT! Duck its swing and keep hitting.\nSwing UP (W) does more damage.');
+    if (this.levelIdx === 0 && this.phase === 'between' && this.waveIdx === 0) this.tip('wall', 'Tip: jump into a wall, then press ↑ again to bounce off it!');
+  }
+
   private updateCombo(dt: number) {
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;
@@ -584,7 +653,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   /** Data to restart the current level (used by the pause menu). */
   restartData(): GameSceneData {
-    return { chapter: this.chapter, level: this.levelIdx, weapon: this.weaponId, score: this.levelStartScore, hp: this.startHp };
+    return { chapter: this.chapter, level: this.levelIdx, weapon: this.weaponId, score: this.levelStartScore, hp: this.startHp, kills: this.levelStartKills };
   }
 
   /** Test hook: state snapshot. */

@@ -65,6 +65,8 @@ export const ease = {
   in: (t: number) => t * t,
 };
 
+export type ZombieVariant = 'plain' | 'bandage' | 'tophat' | 'helmet';
+
 export interface FigureStyle {
   kind: 'player' | 'zombie';
   weapon?: WeaponId | null;
@@ -81,6 +83,8 @@ export interface FigureStyle {
   seed?: number;
   /** Head already knocked off. */
   headless?: boolean;
+  /** Zombie look: accessories differ per chapter. */
+  variant?: ZombieVariant;
   /** Colour overrides (default: black ink on paper). */
   ink?: number;
   fill?: number;
@@ -209,6 +213,7 @@ export function drawFigure(
     line(base, C_INK, S, T(neckTop));
     if (isZombie) {
       drawZombieHead(g, HD, headR, facing, alpha, style.seed ?? 0, base);
+      drawZombieVariant(g, HD, headR, facing, alpha, style.variant ?? 'plain', base);
     } else {
       g.fillStyle(C_INK, alpha);
       g.fillCircle(HD.x, HD.y, headR);
@@ -279,6 +284,45 @@ function drawZombieTorso(g: Phaser.GameObjects.Graphics, H: V, S: V, scale: numb
     g.lineTo(px, py);
   }
   g.strokePath();
+}
+
+function drawZombieVariant(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: number, alpha: number, v: ZombieVariant, base: number) {
+  switch (v) {
+    case 'bandage': {
+      g.lineStyle(r * 0.32, C_INK, alpha);
+      g.lineBetween(c.x - r * 0.9, c.y - r * 0.55, c.x + r * 0.95, c.y + r * 0.05);
+      g.lineStyle(r * 0.18, C_FILL, alpha);
+      g.lineBetween(c.x - r * 0.8, c.y - r * 0.5, c.x + r * 0.85, c.y + r * 0.03);
+      break;
+    }
+    case 'tophat': {
+      const tilt = facing * 0.15;
+      g.fillStyle(C_INK, alpha);
+      g.fillRect(c.x - r * 0.75 + tilt * r, c.y - r * 2.1, r * 1.5, r * 1.3);
+      g.lineStyle(Math.max(2, base * 0.8), C_INK, alpha);
+      g.lineBetween(c.x - r * 1.3, c.y - r * 0.8, c.x + r * 1.3, c.y - r * 0.8);
+      break;
+    }
+    case 'helmet': {
+      // dome over the top half of the head + brim, eye slit left open
+      const dome: V[] = [];
+      const R = r * 1.2;
+      for (let k = 0; k <= 12; k++) {
+        const a = Math.PI + (Math.PI * k) / 12;
+        dome.push({ x: c.x + Math.cos(a) * R, y: c.y - r * 0.15 + Math.sin(a) * R });
+      }
+      g.fillStyle(C_INK, alpha);
+      g.fillPoints(P(dome), true);
+      g.fillRect(c.x - R, c.y - r * 0.2, R * 2, r * 0.32);
+      // plume
+      g.lineStyle(Math.max(2, base * 0.8), C_INK, alpha);
+      g.lineBetween(c.x, c.y - r * 1.3, c.x - facing * r * 1.1, c.y - r * 2.0);
+      g.lineBetween(c.x - facing * r * 0.3, c.y - r * 1.3, c.x - facing * r * 1.3, c.y - r * 1.7);
+      break;
+    }
+    default:
+      break;
+  }
 }
 
 function drawZombieHead(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: number, alpha: number, seed: number, base: number) {
