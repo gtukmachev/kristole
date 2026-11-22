@@ -72,4 +72,8 @@ Test helpers (Playwright, start their own dev server):
 - `node tests/mechanics.mjs` – wall jump, crouch, pause / resume / restart
 - `node tests/playthrough.mjs [levels] [chapter]` – a bot plays (`GOD=1` no damage, `SMART=1` bot ducks and jumps)
 - `node tests/variants.mjs` – screenshots of every chapter + beginner tip
-URL shortcuts: `?scene=game&chapter=1&level=2&weapon=axe`, `&god=1` (no damage), `&debug=1` (hitboxes).
+URL shortcuts:
+- `/<chapter>/<level>` (1-based) jumps straight into a level, e.g. `http://localhost:5173/2/3` or
+  `https://gtukmachev.github.io/kristole/2/3` (Pages serves the game from `404.html` for such paths)
+- `?scene=game&chapter=1&level=2&weapon=axe` (0-based), `&god=1` (no damage), `&debug=1` (hitboxes)
+- `node tests/deeplink.mjs` checks the deep links on the dev server and the production build

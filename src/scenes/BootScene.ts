@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GROUND_Y } from '../game/constants';
+import { CHAPTERS } from '../game/data';
 
 /** Generates the few textures the game needs (no image files) and routes to the first scene. */
 export class BootScene extends Phaser.Scene {
@@ -72,6 +73,21 @@ export class BootScene extends Phaser.Scene {
 
     // URL shortcuts for testing: ?scene=game&chapter=0&level=2&weapon=axe
     const p = new URLSearchParams(window.location.search);
+    // Test shortcut: /<chapter>/<level> (1-based), e.g. /2/3 = chapter 2, level 3.
+    const path = window.location.pathname.slice(import.meta.env.BASE_URL.length - 1);
+    const deep = /^\/(\d+)\/(\d+)\/?$/.exec(path);
+    if (deep) {
+      const ch = Phaser.Math.Clamp(Number(deep[1]) - 1, 0, CHAPTERS.length - 1);
+      const lv = Phaser.Math.Clamp(Number(deep[2]) - 1, 0, CHAPTERS[ch].levels - 1);
+      let w: 'sword' | 'axe' = 'sword';
+      try {
+        if (window.localStorage.getItem('kristole.weapon') === 'axe') w = 'axe';
+      } catch {
+        /* ignore */
+      }
+      this.scene.start('Game', { chapter: ch, level: lv, weapon: w });
+      return;
+    }
     const target = p.get('scene');
     const chapter = Number(p.get('chapter') ?? 0);
     const level = Number(p.get('level') ?? 0);
