@@ -55,5 +55,9 @@ await hold('Enter', 40); // Restart
 await sleep(500);
 s = await snap();
 ok(s.phase === 'intro' && s.zombies.length === 0, `Restart level: phase=${s.phase}`);
+await sleep(2500);
+await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+await sleep(300);
+ok(await page.evaluate(() => window.__kristole.scene.isPaused('Game') && window.__kristole.scene.isActive('Pause')), 'auto-pause on window blur');
 console.log(errors.length ? 'ERRORS: ' + errors.join('\n') : 'no page errors');
 await browser.close(); server.kill();

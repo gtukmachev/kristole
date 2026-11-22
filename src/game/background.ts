@@ -284,26 +284,41 @@ function castle(g: G) {
   }
 }
 
-export function drawBackground(scene: Phaser.Scene, id: BackgroundId) {
-  const g = scene.add.graphics().setDepth(0);
-  if (id === 'cliff') cliff(g);
-  else if (id === 'graveyard') graveyard(g);
-  else castle(g);
+/**
+ * Draws once with Graphics, then bakes the result into a texture, so the thousands of
+ * static pen strokes are not re-tessellated every frame.
+ */
+export function bake(scene: Phaser.Scene, key: string, draw: (g: G) => void, depth: number) {
+  if (!scene.textures.exists(key)) {
+    const g = scene.make.graphics({}, false);
+    draw(g);
+    g.generateTexture(key, WIDTH, HEIGHT);
+    g.destroy();
+  }
+  return scene.add.image(0, 0, key).setOrigin(0).setDepth(depth);
+}
 
+export function drawBackground(scene: Phaser.Scene, id: BackgroundId) {
+  const bg = bake(scene, `bg-${id}`, (g) => {
+    if (id === 'cliff') cliff(g);
+    else if (id === 'graveyard') graveyard(g);
+    else castle(g);
+  }, 0);
   // Ground cover sits in front of the fighters so zombies can rise out of the earth.
-  const ground = scene.add.graphics().setDepth(50);
-  const rand = rng(99);
-  ground.fillStyle(PAPER, 1);
-  ground.fillRect(0, GROUND_Y + 3, WIDTH, HEIGHT - GROUND_Y);
-  ground.lineStyle(1.5, INK, 0.3);
-  for (let i = 0; i < 90; i++) {
-    const x = rand() * WIDTH, y = GROUND_Y + 14 + rand() * (HEIGHT - GROUND_Y - 20);
-    ground.lineBetween(x, y, x + 10 + rand() * 18, y);
-  }
-  for (let i = 0; i < 40; i++) {
-    const x = rand() * WIDTH, y = GROUND_Y + 10 + rand() * (HEIGHT - GROUND_Y - 14);
-    ground.strokeCircle(x, y, 1.5 + rand() * 2.5);
-  }
-  penLine(ground, 0, GROUND_Y + 1, WIDTH, GROUND_Y + 1, 4, INK, rand);
-  return { bg: g, ground };
+  const ground = bake(scene, 'ground', (g) => {
+    const rand = rng(99);
+    g.fillStyle(PAPER, 1);
+    g.fillRect(0, GROUND_Y + 3, WIDTH, HEIGHT - GROUND_Y);
+    g.lineStyle(1.5, INK, 0.3);
+    for (let i = 0; i < 90; i++) {
+      const x = rand() * WIDTH, y = GROUND_Y + 14 + rand() * (HEIGHT - GROUND_Y - 20);
+      g.lineBetween(x, y, x + 10 + rand() * 18, y);
+    }
+    for (let i = 0; i < 40; i++) {
+      const x = rand() * WIDTH, y = GROUND_Y + 10 + rand() * (HEIGHT - GROUND_Y - 14);
+      g.strokeCircle(x, y, 1.5 + rand() * 2.5);
+    }
+    penLine(g, 0, GROUND_Y + 1, WIDTH, GROUND_Y + 1, 4, INK, rand);
+  }, 50);
+  return { bg, ground };
 }

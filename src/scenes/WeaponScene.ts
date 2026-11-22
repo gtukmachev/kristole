@@ -74,11 +74,8 @@ export class WeaponScene extends Phaser.Scene {
       };
       return { focus, activate: choose, zone };
     });
-    cards.forEach((c, i) => {
-      c.zone.on('pointerover', () => nav.set(0, i));
-      c.zone.on('pointerup', () => c.activate());
-    });
-    const nav = new GridNav(this, [cards.map((c) => ({ focus: c.focus, activate: c.activate }))], () => this.scene.start('Menu', { chapter: this.chapter }));
+    cards.forEach((c) => c.zone.on('pointerup', () => c.activate()));
+    const nav = new GridNav(this, [cards.map((c) => ({ focus: c.focus, activate: c.activate, target: c.zone }))], () => this.scene.start('Menu', { chapter: this.chapter }));
     nav.set(0, ids.indexOf(last));
     this.add.text(WIDTH / 2, HEIGHT - 30, '← →  choose     Enter  fight!     Esc  back', { fontFamily: FONT_SLAB, fontSize: '18px', color: '#888888' }).setOrigin(0.5);
   }

@@ -83,18 +83,29 @@ export function makeButton(scene: Phaser.Scene, o: ButtonOpts): Button {
  * Keyboard navigation over a grid of focusable items: arrows / WASD to move,
  * Enter / Space to activate. Rows may have different lengths.
  */
+export interface NavItem {
+  focus(f: boolean): void;
+  activate(): void;
+  left?(): void;
+  right?(): void;
+  /** Interactive object that takes focus on mouse hover. */
+  target?: Phaser.GameObjects.GameObject;
+}
+
 export class GridNav {
   row = 0;
   col = 0;
   constructor(
     private scene: Phaser.Scene,
-    private rows: { focus(f: boolean): void; activate(): void; left?(): void; right?(): void }[][],
+    private rows: NavItem[][],
     private onBack?: () => void,
     private blocked?: () => boolean,
   ) {
     const kb = scene.input.keyboard!;
     kb.on('keydown', this.onKey, this);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => kb.off('keydown', this.onKey, this));
+    // Mouse hover moves the keyboard focus too, so both always agree.
+    rows.forEach((r, ri) => r.forEach((it, ci) => it.target?.on('pointerover', () => this.set(ri, ci))));
     this.refresh();
   }
 
@@ -151,5 +162,5 @@ export class GridNav {
 }
 
 export function buttonItem(b: Button) {
-  return { focus: (f: boolean) => b.setFocus(f), activate: () => b.activate() };
+  return { focus: (f: boolean) => b.setFocus(f), activate: () => b.activate(), target: b.container as Phaser.GameObjects.GameObject };
 }

@@ -76,6 +76,7 @@ export class ResultScene extends Phaser.Scene {
           sfx.click();
           o.act();
         },
+        target: t,
       };
       t.on('pointerup', item.activate);
       return item;

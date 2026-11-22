@@ -34,6 +34,7 @@ export class PauseScene extends Phaser.Scene {
           sfx.click();
           actions[i]();
         },
+        target: t,
       },
     ]);
     texts.forEach((t, i) => t.on('pointerup', () => rows[i][0].activate()));

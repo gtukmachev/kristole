@@ -7,6 +7,7 @@ import { storage } from '../game/storage';
 import { GridNav, buttonItem, makeButton } from '../game/ui';
 import { sfx } from '../game/sfx';
 import { drawFigure, pose } from '../game/figure';
+import { bake } from '../game/background';
 
 type Seg = [number, number, number, number];
 
@@ -52,14 +53,14 @@ export function drawLogo(scene: Phaser.Scene, cx: number, top: number, scale: nu
 }
 
 export function menuBackdrop(scene: Phaser.Scene) {
-  const g = scene.add.graphics();
-  g.fillStyle(MENU_BG, 1);
-  g.fillRect(0, 0, WIDTH, HEIGHT);
-  for (let i = 0; i < 1400; i++) {
-    g.fillStyle(0xffffff, Math.random() * 0.05);
-    g.fillRect(Math.random() * WIDTH, Math.random() * HEIGHT, 2, 2);
-  }
-  return g;
+  return bake(scene, 'menu-bg', (g) => {
+    g.fillStyle(MENU_BG, 1);
+    g.fillRect(0, 0, WIDTH, HEIGHT);
+    for (let i = 0; i < 1400; i++) {
+      g.fillStyle(0xffffff, Math.random() * 0.05);
+      g.fillRect(Math.random() * WIDTH, Math.random() * HEIGHT, 2, 2);
+    }
+  }, 0);
 }
 
 export class MenuScene extends Phaser.Scene {

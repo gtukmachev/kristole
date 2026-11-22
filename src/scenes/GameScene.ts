@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     banner: Phaser.GameObjects.Text;
     sub: Phaser.GameObjects.Text;
     hint: Phaser.GameObjects.Text;
+    mute: Phaser.GameObjects.Text;
   };
   private debugG?: Phaser.GameObjects.Graphics;
   private hitStop = 0;
@@ -139,6 +140,11 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
     this.createHud();
 
+    // Lose focus (switch tab / window) -> pause, so you don't die while away.
+    const onBlur = () => this.openPause();
+    this.game.events.on(Phaser.Core.Events.BLUR, onBlur);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(Phaser.Core.Events.BLUR, onBlur));
+
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       // Don't let keys that were held while paused leak into the game.
       kb.resetKeys();
@@ -165,7 +171,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const banner = txt(WIDTH / 2, 250, '', 84).setOrigin(0.5).setAlpha(0);
     const sub = txt(WIDTH / 2, 320, '', 30, FONT_HAND).setOrigin(0.5).setAlpha(0);
     const hint = txt(WIDTH / 2, HEIGHT - 42, '', 20, FONT_HAND).setOrigin(0.5).setAlpha(0);
-    this.hud = { hp, score, combo, level, wave, banner, sub, hint };
+    const mute = txt(WIDTH - 24, HEIGHT - 34, 'SOUND OFF (M)', 18).setOrigin(1, 0).setVisible(sfx.muted);
+    this.hud = { hp, score, combo, level, wave, banner, sub, hint, mute };
     if (this.chapter === 0 && this.levelIdx === 0) {
       hint.setText('A / D or ← →  move    ↑  jump (also off walls)    ↓  duck    W  swing up    S  swing down    Esc  pause');
       hint.setAlpha(1);
@@ -219,12 +226,12 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const k = this.keys;
     const JD = Phaser.Input.Keyboard.JustDown;
 
-    if (JD(k.esc) && this.phase !== 'over') {
-      this.scene.launch('Pause', { from: 'Game' });
-      this.scene.pause();
+    if (JD(k.esc)) {
+      this.openPause();
       return;
     }
     if (JD(k.m)) sfx.toggleMute();
+    this.hud.mute.setVisible(sfx.muted);
 
     if (this.hitStop > 0) {
       this.hitStop -= dt;
@@ -285,6 +292,12 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const moved = Math.abs(p.zone.x - before);
       if (moved < overlapX - 0.5) z.zone.x -= dir * (overlapX - moved); // pinned to a wall: shove the zombie
     }
+  }
+
+  private openPause() {
+    if (this.phase === 'over' || !this.scene.isActive()) return;
+    this.scene.launch('Pause');
+    this.scene.pause();
   }
 
   private updateWaves(dt: number) {
@@ -488,7 +501,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   zombieStrike(z: Zombie, band: Rect) {
-    if (this.player.dead) return;
+    if (this.player.dead || this.phase === 'cleared') return;
     if (!overlap(band, this.player.hurtbox())) return;
     if (this.player.damage(z.damage, z.facing)) {
       const hb = this.player.hurtbox();
