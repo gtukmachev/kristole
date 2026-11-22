@@ -20,6 +20,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   create(d: ResultData) {
+    sfx.playMusic(null);
     const g = this.add.graphics();
     g.fillStyle(PAPER, 1);
     g.fillRect(0, 0, WIDTH, HEIGHT);

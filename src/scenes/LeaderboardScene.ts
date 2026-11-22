@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sfx } from '../game/sfx';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, MENU_ORANGE, MENU_PALE, MENU_WHITE, MENU_YELLOW, WIDTH, hex } from '../game/constants';
 import { CHAPTERS, WEAPONS } from '../game/data';
 import { storage } from '../game/storage';
@@ -17,6 +18,7 @@ export class LeaderboardScene extends Phaser.Scene {
   }
 
   create() {
+    sfx.playMusic('menu');
     menuBackdrop(this);
     this.add.text(WIDTH / 2, 60, 'LEADERBOARD', { fontFamily: FONT_IMPACT, fontSize: '64px', color: hex(MENU_ORANGE) }).setOrigin(0.5);
     const board = storage.getBoard();

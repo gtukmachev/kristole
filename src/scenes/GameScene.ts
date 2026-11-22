@@ -81,6 +81,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.hitStop = 0;
     this.phase = 'intro';
     this.phaseT = 0;
+    this.pending = 0;
   }
 
   create() {
@@ -134,6 +135,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       kb.resetKeys();
     });
 
+    sfx.playMusic('game');
     this.startIntro();
     (window as unknown as { __scene?: GameScene }).__scene = this;
   }
@@ -190,6 +192,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.spawnQueue = [...rest, ...giant];
     this.spawnTimer = 0.4;
     sfx.wave();
+    sfx.intensity = Math.min(1, (this.chapter * 5 + this.levelIdx) / 7 + this.waveIdx * 0.12);
     const last = this.waveIdx === this.level.waves.length - 1;
     this.banner(`WAVE ${this.waveIdx + 1}`, giant.length ? 'Something BIG is coming…' : last ? 'Final wave!' : '', 1100);
   }
@@ -274,7 +277,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         break;
       case 'wave': {
         const wave = this.level.waves[this.waveIdx];
-        const aliveCount = this.zombies.filter((z) => z.alive).length;
+        const aliveCount = this.zombies.filter((z) => z.alive).length + this.pending;
         this.spawnTimer -= dt;
         if (this.spawnQueue.length && this.spawnTimer <= 0 && aliveCount < wave.maxAlive) {
           this.spawnZombie(this.spawnQueue.shift()!);
@@ -310,6 +313,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
   }
 
+  private pending = 0;
+
   private spawnZombie(size: ZombieSize) {
     // Rise out of the ground somewhere not right on top of the player.
     const margin = 60;
@@ -318,11 +323,30 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       x = Phaser.Math.Between(ARENA_LEFT + margin, ARENA_RIGHT - margin);
       if (Math.abs(x - this.player.x) > 260) break;
     }
-    const z = new Zombie(this, this, size, x, this.level.strength);
-    z.facing = this.player.x >= x ? 1 : -1;
-    this.zombies.push(z);
-    this.dust.explode(18, x, GROUND_Y);
-    this.cameras.main.shake(size === 'giant' ? 400 : 120, size === 'giant' ? 0.008 : 0.002);
+    // The ground cracks first, so the player sees where a zombie will come out.
+    const crack = this.add.graphics().setDepth(57).setPosition(x, 0);
+    const w = size === 'giant' ? 70 : size === 'big' ? 50 : 34;
+    crack.lineStyle(3, INK, 1);
+    crack.beginPath();
+    crack.moveTo(-w, GROUND_Y + 2);
+    for (let i = 1; i <= 6; i++) crack.lineTo(-w + (2 * w * i) / 6, GROUND_Y + 2 + (i % 2 ? 7 : -1));
+    crack.strokePath();
+    crack.lineBetween(-6, GROUND_Y + 4, -12, GROUND_Y + 16);
+    crack.lineBetween(8, GROUND_Y + 4, 14, GROUND_Y + 18);
+    crack.setScale(0.2, 1);
+    this.tweens.add({ targets: crack, scaleX: 1, duration: 450, ease: 'Cubic.Out' });
+    this.dust.explode(6, x, GROUND_Y);
+    this.pending++;
+    this.time.delayedCall(650, () => {
+      this.pending--;
+      this.tweens.add({ targets: crack, alpha: 0, delay: 1200, duration: 800, onComplete: () => crack.destroy() });
+      if (this.phase === 'over') return;
+      const z = new Zombie(this, this, size, x, this.level.strength);
+      z.facing = this.player.x >= x ? 1 : -1;
+      this.zombies.push(z);
+      this.dust.explode(18, x, GROUND_Y);
+      this.cameras.main.shake(size === 'giant' ? 400 : 120, size === 'giant' ? 0.008 : 0.002);
+    });
   }
 
   private levelCleared() {
@@ -427,16 +451,14 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   playerDied() {
     this.phase = 'over';
     this.phaseT = 0;
+    sfx.playMusic(null);
     sfx.gameOver();
     this.spill(this.player.x, this.player.footY - 60, 0, 50);
     this.banner('YOU DIED', `Score ${this.score}`, 2200);
   }
 
-  /** Called by Player when bouncing off a wall. */
-  wallDust(x: number, y: number, dirX: number) {
-    this.dust.setParticleTint(INK_SOFT);
-    for (let i = 0; i < 6; i++) this.dust.emitParticleAt(x, y + Phaser.Math.Between(-20, 20));
-    void dirX;
+  dustAt(x: number, y: number, n: number) {
+    for (let i = 0; i < n; i++) this.dust.emitParticleAt(x + Phaser.Math.Between(-12, 12), y + Phaser.Math.Between(-6, 0));
   }
 
   // ---- juice ------------------------------------------------------------
@@ -537,7 +559,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     combo.setText(this.combo > 1 && this.comboTimer > 0 ? `COMBO x${Math.min(this.combo, 5)}` : '');
     const total = this.level.waves.length;
     if (this.phase === 'wave' || this.phase === 'between') {
-      const left = this.spawnQueue.length + this.zombies.filter((z) => z.alive).length;
+      const left = this.spawnQueue.length + this.pending + this.zombies.filter((z) => z.alive).length;
       wave.setText(`WAVE ${this.waveIdx + 1}/${total}   ·   ZOMBIES LEFT: ${left}`);
     } else wave.setText('');
   }

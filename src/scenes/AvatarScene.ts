@@ -29,6 +29,7 @@ export class AvatarScene extends Phaser.Scene {
   }
 
   create() {
+    sfx.playMusic('menu');
     this.profile = storage.getProfile();
     menuBackdrop(this);
     this.add.text(WIDTH / 2, 60, 'AVATAR', { fontFamily: FONT_IMPACT, fontSize: '64px', color: hex(MENU_ORANGE) }).setOrigin(0.5);

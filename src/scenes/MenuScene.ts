@@ -6,6 +6,7 @@ import { CHAPTERS } from '../game/data';
 import { storage } from '../game/storage';
 import { GridNav, buttonItem, makeButton } from '../game/ui';
 import { sfx } from '../game/sfx';
+import { drawFigure, pose } from '../game/figure';
 
 type Seg = [number, number, number, number];
 
@@ -69,6 +70,8 @@ export class MenuScene extends Phaser.Scene {
   private arrows!: Phaser.GameObjects.Graphics;
   private toast!: Phaser.GameObjects.Text;
   private chapterFocused = false;
+  private walkers: { x: number; dir: number; speed: number; scale: number; phase: number; seed: number }[] = [];
+  private walkG!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('Menu');
@@ -79,7 +82,18 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    sfx.playMusic('menu');
     menuBackdrop(this);
+    // Zombies shamble along the bottom of the menu, behind everything.
+    this.walkG = this.add.graphics();
+    this.walkers = [0, 1, 2].map((i) => ({
+      x: Math.random() * WIDTH,
+      dir: i % 2 ? -1 : 1,
+      speed: 18 + Math.random() * 14,
+      scale: 0.55 + Math.random() * 0.35,
+      phase: Math.random() * 10,
+      seed: i + 3,
+    }));
     const logo = drawLogo(this, WIDTH / 2, 38, 0.66);
     logo.setAlpha(0);
     this.tweens.add({ targets: logo, alpha: 1, duration: 600 });
@@ -131,6 +145,24 @@ export class MenuScene extends Phaser.Scene {
     };
     new GridNav(this, [[buttonItem(play), buttonItem(avatar), buttonItem(board)], [buttonItem(events), buttonItem(rewards)], [chapterItem]]);
     this.input.keyboard!.on('keydown-M', () => sfx.toggleMute());
+  }
+
+  update(_t: number, dms: number) {
+    const dt = dms / 1000;
+    const g = this.walkG;
+    g.clear();
+    for (const w of this.walkers) {
+      w.x += w.dir * w.speed * dt;
+      w.phase += dt * 4;
+      if (w.x < -80) w.x = WIDTH + 80;
+      if (w.x > WIDTH + 80) w.x = -80;
+      const s = Math.sin(w.phase), c = Math.cos(w.phase);
+      drawFigure(g, w.x, HEIGHT - 4, w.dir, w.scale, pose({
+        lean: 0.3, head: 0.2 + Math.sin(w.phase * 0.5) * 0.15,
+        fThigh: 0.4 * s, fShin: 0.4 * s - 0.3 * Math.max(0, c), bThigh: -0.4 * s, bShin: -0.4 * s - 0.3 * Math.max(0, -c),
+        fUpper: 1.45 + 0.1 * s, fFore: 1.6, bUpper: 1.3 - 0.1 * s, bFore: 1.5,
+      }), { kind: 'zombie', seed: w.seed, ink: 0x3a3a3a, fill: 0x0a0a0a });
+    }
   }
 
   private showToast(s: string) {

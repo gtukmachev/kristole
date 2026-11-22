@@ -21,6 +21,7 @@ export class WeaponScene extends Phaser.Scene {
   }
 
   create() {
+    sfx.playMusic('menu');
     menuBackdrop(this);
     const ch = CHAPTERS[this.chapter];
     this.add.text(WIDTH / 2, 60, 'CHOOSE FROM 2 WEAPONS', { fontFamily: FONT_IMPACT, fontSize: '60px', color: hex(MENU_ORANGE) }).setOrigin(0.5);

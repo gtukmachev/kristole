@@ -81,7 +81,15 @@ export interface FigureStyle {
   seed?: number;
   /** Head already knocked off. */
   headless?: boolean;
+  /** Colour overrides (default: black ink on paper). */
+  ink?: number;
+  fill?: number;
 }
+
+// Active colours for the figure being drawn (set per drawFigure call).
+let C_INK = INK;
+let C_BACK = INK_SOFT;
+let C_FILL = 0xf7f7f2;
 
 export interface FigurePoints {
   hip: Phaser.Types.Math.Vector2Like;
@@ -120,6 +128,9 @@ export function drawFigure(
   p: Pose,
   style: FigureStyle,
 ): FigurePoints {
+  C_INK = style.ink ?? INK;
+  C_FILL = style.fill ?? 0xf7f7f2;
+  C_BACK = style.ink !== undefined ? style.ink : INK_SOFT;
   const hipH = hipHeight(p);
   const hip: V = { x: 0, y: -hipH };
   const fKnee = add(hip, dir(p.fThigh, BONES.thigh));
@@ -168,7 +179,7 @@ export function drawFigure(
   };
 
   const H = T(hip), S = T(shoulder), HD = T(head);
-  const back = isZombie ? INK_SOFT : 0x333333;
+  const back = isZombie ? C_BACK : 0x333333;
 
   // Back limbs (slightly lighter so the figure reads with depth).
   limb(base, back, S, T(bElbow), T(bHand));
@@ -178,15 +189,15 @@ export function drawFigure(
   if (isZombie) {
     drawZombieTorso(g, H, S, scale, alpha, style.seed ?? 0);
   } else {
-    line(base * 1.45, INK, H, S);
+    line(base * 1.45, C_INK, H, S);
   }
 
   // Front leg.
-  limb(base, INK, H, T(fKnee), T(fFoot));
+  limb(base, C_INK, H, T(fKnee), T(fFoot));
   if (!isZombie) {
     // little boots
     const ff = T(fFoot), bf = T(bFoot);
-    g.fillStyle(INK, alpha);
+    g.fillStyle(C_INK, alpha);
     g.fillEllipse(ff.x + facing * 3 * scale, ff.y - 1 * scale, 11 * scale, 6 * scale);
     g.fillStyle(back, alpha);
     g.fillEllipse(bf.x + facing * 3 * scale, bf.y - 1 * scale, 11 * scale, 6 * scale);
@@ -195,22 +206,22 @@ export function drawFigure(
   // Neck + head.
   const headR = BONES.headR * scale;
   if (!style.headless) {
-    line(base, INK, S, T(neckTop));
+    line(base, C_INK, S, T(neckTop));
     if (isZombie) {
       drawZombieHead(g, HD, headR, facing, alpha, style.seed ?? 0, base);
     } else {
-      g.fillStyle(INK, alpha);
+      g.fillStyle(C_INK, alpha);
       g.fillCircle(HD.x, HD.y, headR);
       drawHeadgear(g, HD, headR, facing, alpha, style);
     }
   } else {
     // stump
-    line(base * 1.2, INK, S, T(neckTop));
+    line(base * 1.2, C_INK, S, T(neckTop));
   }
 
   // Front arm + weapon.
   const FH = T(fHand);
-  limb(base, INK, S, T(fElbow), FH);
+  limb(base, C_INK, S, T(fElbow), FH);
   let tipW = FH;
   if (style.weapon) {
     const d = worldDir(p.weapon, 1);
@@ -221,7 +232,7 @@ export function drawFigure(
     // claw fingers
     const fd = worldDir(p.fFore, 1);
     const bd = worldDir(p.bFore, 1);
-    for (const [h, d, c] of [[FH, fd, INK], [T(bHand), bd, back]] as [V, V, number][]) {
+    for (const [h, d, c] of [[FH, fd, C_INK], [T(bHand), bd, back]] as [V, V, number][]) {
       for (const off of [-0.5, 0, 0.5]) {
         const ang = Math.atan2(d.y, d.x) + off;
         const l = 6 * scale;
@@ -245,9 +256,9 @@ function drawZombieTorso(g: Phaser.GameObjects.Graphics, H: V, S: V, scale: numb
     { x: H.x - nx * wBot, y: H.y - ny * wBot },
     { x: H.x + nx * wBot, y: H.y + ny * wBot },
   ];
-  g.fillStyle(0xf7f7f2, alpha);
+  g.fillStyle(C_FILL, alpha);
   g.fillPoints(P(pts), true);
-  g.lineStyle(2.4 * scale, INK, alpha);
+  g.lineStyle(2.4 * scale, C_INK, alpha);
   g.strokePoints(P(pts), true);
   const stripes = 4;
   for (let i = 1; i <= stripes; i++) {
@@ -258,7 +269,7 @@ function drawZombieTorso(g: Phaser.GameObjects.Graphics, H: V, S: V, scale: numb
     g.lineBetween(cx + nx * w, cy + ny * w + wobble, cx - nx * w, cy - ny * w - wobble);
   }
   // torn hem
-  g.lineStyle(1.6 * scale, INK, alpha);
+  g.lineStyle(1.6 * scale, C_INK, alpha);
   const a = pts[2], b = pts[3];
   g.beginPath();
   g.moveTo(a.x, a.y);
@@ -271,16 +282,16 @@ function drawZombieTorso(g: Phaser.GameObjects.Graphics, H: V, S: V, scale: numb
 }
 
 function drawZombieHead(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: number, alpha: number, seed: number, base: number) {
-  g.fillStyle(0xf7f7f2, alpha);
+  g.fillStyle(C_FILL, alpha);
   g.fillCircle(c.x, c.y, r);
-  g.lineStyle(Math.max(2, base * 0.7), INK, alpha);
+  g.lineStyle(Math.max(2, base * 0.7), C_INK, alpha);
   g.strokeCircle(c.x, c.y, r);
   // hollow eyes
-  g.fillStyle(INK, alpha);
+  g.fillStyle(C_INK, alpha);
   g.fillCircle(c.x + facing * r * 0.25, c.y - r * 0.15, r * 0.2);
   g.fillCircle(c.x + facing * r * 0.7, c.y - r * 0.1, r * 0.16);
   // jagged mouth
-  g.lineStyle(Math.max(1.2, base * 0.35), INK, alpha);
+  g.lineStyle(Math.max(1.2, base * 0.35), C_INK, alpha);
   g.beginPath();
   g.moveTo(c.x + facing * r * 0.15, c.y + r * 0.45);
   g.lineTo(c.x + facing * r * 0.35, c.y + r * 0.3);
@@ -289,7 +300,7 @@ function drawZombieHead(g: Phaser.GameObjects.Graphics, c: V, r: number, facing:
   g.strokePath();
   // a few hair strands
   const n = 2 + (seed % 3);
-  g.lineStyle(Math.max(1.2, base * 0.4), INK, alpha);
+  g.lineStyle(Math.max(1.2, base * 0.4), C_INK, alpha);
   for (let i = 0; i < n; i++) {
     const a = -Math.PI / 2 - facing * (0.3 + i * 0.35);
     const sx = c.x + Math.cos(a) * r, sy = c.y + Math.sin(a) * r;
@@ -308,7 +319,7 @@ function drawHeadgear(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: n
       const flutter = Math.sin(t * 14) * 3 + Math.min(Math.abs(vx) / 60, 4);
       const bx = c.x - facing * r;
       const by = c.y - r * 0.25;
-      g.lineStyle(r * 0.28, INK, alpha);
+      g.lineStyle(r * 0.28, C_INK, alpha);
       g.beginPath();
       g.moveTo(bx, by);
       g.lineTo(bx - facing * r * 1.1, by + r * 0.3 + flutter);
@@ -322,7 +333,7 @@ function drawHeadgear(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: n
       break;
     }
     case 'hood': {
-      g.fillStyle(INK, alpha);
+      g.fillStyle(C_INK, alpha);
       g.fillCircle(c.x - facing * r * 0.15, c.y - r * 0.1, r * 1.3);
       g.fillTriangle(
         c.x - facing * r * 0.9, c.y - r * 0.6,
@@ -334,9 +345,9 @@ function drawHeadgear(g: Phaser.GameObjects.Graphics, c: V, r: number, facing: n
       break;
     }
     case 'hat': {
-      g.lineStyle(r * 0.3, INK, alpha);
+      g.lineStyle(r * 0.3, C_INK, alpha);
       g.lineBetween(c.x - r * 1.6, c.y - r * 0.7, c.x + r * 1.6, c.y - r * 0.7);
-      g.fillStyle(INK, alpha);
+      g.fillStyle(C_INK, alpha);
       g.fillRect(c.x - r * 0.85, c.y - r * 1.8, r * 1.7, r * 1.15);
       g.lineStyle(r * 0.2, 0xffffff, alpha);
       g.lineBetween(c.x - r * 0.85, c.y - r * 0.95, c.x + r * 0.85, c.y - r * 0.95);

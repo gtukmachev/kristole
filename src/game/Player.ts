@@ -54,6 +54,7 @@ const CLOW_B = pose({ ...P_CROUCH, lean: 0.95, fUpper: 1.25, fFore: 1.15, weapon
 export interface PlayerHost {
   playerSwing(player: Player, kind: SwingKind, box: Rect, hitOnce: Set<unknown>): void;
   playerDied(player: Player): void;
+  dustAt(x: number, y: number, n: number): void;
 }
 
 export class Player {
@@ -82,7 +83,7 @@ export class Player {
   private trailPts: { x: number; y: number; t: number }[] = [];
   private wasOnGround = true;
 
-  constructor(private scene: Phaser.Scene, private host: PlayerHost, x: number, weapon: WeaponId, private profile: Profile) {
+  constructor(scene: Phaser.Scene, private host: PlayerHost, x: number, weapon: WeaponId, private profile: Profile) {
     this.weapon = WEAPONS[weapon];
     this.zone = scene.add.zone(x, GROUND_Y - PLAYER_H / 2, PLAYER_W, PLAYER_H);
     scene.physics.add.existing(this.zone);
@@ -149,7 +150,10 @@ export class Player {
     this.time += dt;
     const onGround = this.onGround;
     if (onGround) this.lastGroundAt = this.time;
-    if (onGround && !this.wasOnGround && !this.dead) this.cur = { ...this.cur, lift: -4 };
+    if (onGround && !this.wasOnGround && !this.dead) {
+      this.cur = { ...this.cur, lift: -4 };
+      this.host.dustAt(this.x, this.footY, 8);
+    }
     this.wasOnGround = onGround;
 
     if (this.dead) {
@@ -191,6 +195,7 @@ export class Player {
         this.jumpBufferedAt = -1;
         this.lastGroundAt = -1;
         sfx.jump();
+        this.host.dustAt(this.x, this.footY, 5);
       } else if (touchingLeft || touchingRight) {
         // Bounce off the wall.
         const away = touchingLeft ? 1 : -1;
@@ -199,11 +204,7 @@ export class Player {
         this.lockUntil = this.time + 0.22;
         this.jumpBufferedAt = -1;
         sfx.wallJump();
-        (this.scene as unknown as { wallDust?: (x: number, y: number, d: number) => void }).wallDust?.(
-          touchingLeft ? this.body.left : this.body.right,
-          this.body.center.y,
-          away,
-        );
+        this.host.dustAt(touchingLeft ? this.body.left : this.body.right, this.body.center.y, 7);
       }
     }
 
