@@ -82,7 +82,10 @@ const P_TUCK = pose({ lean: 0.6, head: 0.3, fThigh: 2.0, fShin: 0.3, bThigh: 1.7
 const STAND_HIGH: [Pose, Pose][] = [[HIGH_A, HIGH_B], [SPIN_A, SPIN_B], [BACK_A, BACK_B]];
 const STAND_LOW: [Pose, Pose][] = [[LOW_A, LOW_B], [LSPIN_A, LSPIN_B], [STAB_A, STAB_B]];
 
-/** Shield points spent per point of blocked damage (lvl-1 medium zombie: 2 blocks hold, the 3rd breaks). */
+/**
+ * Shield points spent per point of blocked damage. Lvl-1 medium zombie (12 dmg -> 40.8 per block): with the slow
+ * regen while guarding (8/s, ~10 per attack cycle) two blocks hold and the 3rd breaks through.
+ */
 const BLOCK_COST = 3.4;
 const SHIELD_REGEN_DELAY = 1.5;
 const SHIELD_REGEN = 24;
@@ -246,7 +249,8 @@ export class Player {
     // Shield regenerates after a short pause without blocking.
     // Shield always refills: slowly while guarding, faster after a pause without blocks.
     const regen = this.blocking ? SHIELD_REGEN_GUARD : this.time - this.lastBlockAt > SHIELD_REGEN_DELAY ? SHIELD_REGEN : SHIELD_REGEN_SLOW;
-    this.shield = Math.min(this.maxShield, this.shield + regen * dt);
+    // ...except right after a guard break: then it stays empty for a moment.
+    if (this.time - this.shieldBrokeAt > SHIELD_REGEN_DELAY) this.shield = Math.min(this.maxShield, this.shield + regen * dt);
     this.guard += ((this.blocking ? 1 : 0) - this.guard) * Math.min(1, dt * 12);
     if (onGround && !this.wasOnGround && !this.dead) {
       this.cur = { ...this.cur, lift: -4 };

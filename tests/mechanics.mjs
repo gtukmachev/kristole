@@ -103,5 +103,20 @@ await page.evaluate(() => { const sc = window.__scene; sc.player.hp = 40; sc.spa
 await sleep(300);
 const healed = await page.evaluate(() => window.__scene.player.hp);
 ok(healed === 65, `heart heals +25 (hp ${healed})`);
+// review fix: a parachutist hit in mid-air keeps falling, then lands normally
+await page.goto(`http://localhost:${PORT}/?scene=game&chapter=2&level=3&god=1`);
+let chuteOk = null;
+for (let i = 0; i < 40 && chuteOk === null; i++) {
+  await sleep(250);
+  chuteOk = await page.evaluate(() => {
+    const z = window.__scene.zombies.find((q) => q.state === 'falling' && q.size !== 'giant' && q.hp > 10);
+    if (!z) return null;
+    z.takeHit(1, 'high', 1, 100);
+    return z.state === 'falling' ? z.seed : false;
+  });
+}
+await sleep(8000);
+const landed = await page.evaluate((seed) => { const z = window.__scene.zombies.find((q) => q.seed === seed); return z ? { state: z.state, maxVy: z.body.maxVelocity.y } : null; }, chuteOk);
+ok(chuteOk !== null && chuteOk !== false && landed && landed.state !== 'falling' && landed.maxVy === 1400, `parachutist hit mid-air stays falling, then lands (${JSON.stringify(landed)})`);
 console.log(errors.length ? 'ERRORS: ' + errors.join('\n') : 'no page errors');
 await browser.close(); server.kill();

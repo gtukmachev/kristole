@@ -151,7 +151,7 @@ export function drawFigure(
   const fHand = add(fElbow, dir(p.fFore, BONES.fore));
   const bElbow = add(shoulder, dir(p.bUpper, BONES.upper));
   const bHand = add(bElbow, dir(p.bFore, BONES.fore));
-  const wLen = style.weapon ? WEAPON_LEN[style.weapon] : 0;
+  const wLen = style.weapon ? WEAPON_LEN[style.weapon] * (style.weaponScale ?? 1) : 0;
 
   const cr = Math.cos(p.rot);
   const sr = Math.sin(p.rot);

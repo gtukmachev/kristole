@@ -291,7 +291,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.player.update(dt, input);
 
     // Zombies queue up instead of standing inside each other.
-    const alive = this.zombies.filter((z) => z.alive && z.state !== 'rising');
+    const alive = this.zombies.filter((z) => z.alive && z.state !== 'rising' && z.state !== 'falling');
     for (const z of alive) {
       z.blocked = alive.some((o) => {
         if (o === z) return false;
@@ -332,7 +332,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     if (p.dead || p.flipping) return; // a flip passes through zombies
     const pr = p.hurtbox();
     for (const z of this.zombies) {
-      if (!z.alive || z.state === 'rising') continue;
+      if (!z.alive || z.state === 'rising' || z.state === 'falling') continue;
       const zr = z.hurtbox();
       if (pr.bottom < zr.top + 18) continue; // above it: jumping over
       const minDist = (pr.right - pr.left) / 2 + ((zr.right - zr.left) / 2) * 0.7;

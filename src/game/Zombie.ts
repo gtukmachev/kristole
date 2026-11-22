@@ -110,13 +110,14 @@ export class Zombie {
     if (this.hp <= 0) {
       this.killedBy = kind;
       this.setState('dying');
+      this.body.setMaxVelocityY(1400); // a parachutist killed mid-air falls like a stone
       this.body.setAllowGravity(true);
       this.body.setVelocity(dirX * knockback * 1.1, -180);
       return true;
     }
     // After a stagger a zombie keeps pushing forward for a moment (poise), so spamming one button isn't enough.
     const staggers = (!this.def.heavy || kind === 'high') && this.time >= this.poiseUntil;
-    if (staggers && this.state !== 'rising') {
+    if (staggers && this.state !== 'rising' && this.state !== 'falling') {
       this.setState('hurt');
       this.poiseUntil = this.time + 0.3 + 0.7;
       this.body.setVelocityX(dirX * knockback / (this.def.heavy ? 2 : 1));
@@ -232,6 +233,7 @@ export class Zombie {
       }
     }
 
+    if (this.chuteDrop > 0 && this.state !== 'falling') this.chuteDrop = Math.max(0, this.chuteDrop - dt * 1.2);
     this.cur = this.computePose(dt, lowAttack);
     this.draw();
   }
@@ -333,7 +335,6 @@ export class Zombie {
   private drawChute(g: Phaser.GameObjects.Graphics) {
     const falling = this.state === 'falling';
     if (!falling && this.chuteDrop <= 0) return;
-    if (!falling) this.chuteDrop -= 0.02;
     const a = falling ? 1 : Math.max(0, this.chuteDrop);
     const top = this.footY - this.height - 70 * this.scale + (falling ? Math.sin(this.time * 3) * 3 : (1 - a) * 60);
     const w = 70 * this.scale;
