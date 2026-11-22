@@ -288,6 +288,28 @@ class Sfx {
     if (this.intensity > 0.75 && step % 4 === 2) this.mnote(t, 440 * (step === 2 ? 1 : 1.19), 0.12, 'square', 0.025, 1800);
   }
 
+  block() {
+    const t = this.now();
+    if (!t) return;
+    // metallic clang
+    this.tone(t, 0.25, 'square', 1250, 1150, 0.12);
+    this.tone(t, 0.3, 'triangle', 1870, 1800, 0.1);
+    this.noise(t, 0.08, 'highpass', 4000, 3000, 0.3);
+  }
+
+  guardBreak() {
+    const t = this.now();
+    if (!t) return;
+    this.noise(t, 0.25, 'bandpass', 2500, 400, 0.5, 2);
+    this.tone(t, 0.3, 'sawtooth', 600, 120, 0.15);
+  }
+
+  flip() {
+    const t = this.now();
+    if (!t) return;
+    this.noise(t, 0.35, 'bandpass', 400, 1800, 0.35, 2);
+  }
+
   thunder() {
     const t = this.now();
     if (!t) return;

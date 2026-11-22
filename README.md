@@ -31,11 +31,12 @@ To redeploy a release by hand: Actions → "Release & deploy to GitHub Pages" �
 
 | Key | Action |
 |---|---|
-| A / D, ← / → | move left / right |
-| ↑ | jump (jump again while touching a wall in the air to bounce off it) |
+| ← / → | move left / right |
+| ↑ or Space | jump; press again in the air: next to a wall – bounce off it, otherwise (holding ← / →) – **flip** that flies further and passes through zombies |
 | ↓ (hold) | duck |
-| W | swing weapon up |
-| S | swing weapon down |
+| W | swing up (3 random animations standing; own moves when jumping / ducking) |
+| S | swing down (in the air: stab downward) |
+| A or D (hold) | **block** with the sword – costs shield (grey bar), which refills after a short pause |
 | Esc | pause / menu |
 | M | sound on / off |
 
@@ -48,6 +49,8 @@ Menus also work with the mouse.
   **medium** and **big** ones swing high (duck under it). The last wave of a chapter brings a **giant**.
 - An arrow above a zombie shows what to do when it winds up: ↓ duck, ↑ jump.
 - **Swing up** hits harder and knocks heads off; **swing down** reaches everything, including small zombies.
+- Block (A / D): a blocked hit only pushes you back, but costs shield. On level 1 the shield holds two medium hits, the third breaks through.
+- If a zombie is a little out of reach, a standing swing lunges forward.
 - Points for every zombie, combo multiplier for quick kills, bonus for each level.
 - 3 chapters × 5 levels: The Cliff, The Graveyard, The Castle. Finishing a chapter unlocks the next one.
 - Leaderboard, avatar name and progress are stored in the browser (localStorage).

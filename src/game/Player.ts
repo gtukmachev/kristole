@@ -21,7 +21,12 @@ export interface PlayerInput {
   jumpPressed: boolean;
   swingHigh: boolean;
   swingLow: boolean;
+  /** A or D held: guard with the sword. */
+  block: boolean;
 }
+
+export type HitResult = 'blocked' | 'hit' | 'ignored';
+type AttackCtx = 'stand' | 'crouch' | 'air';
 
 const SPEED = 310;
 const JUMP_V = 870;
@@ -45,16 +50,50 @@ const HIGH_B = pose({ lean: -0.12, fThigh: 0.35, fShin: 0.05, bThigh: -0.3, bShi
 // Swing down: from overhead, chop down-forward ("S – swing sword down").
 const LOW_A = pose({ lean: -0.15, fThigh: 0.3, fShin: 0.05, bThigh: -0.3, bShin: -0.1, fUpper: 2.9, fFore: 3.2, bUpper: -0.6, bFore: -0.2, weapon: 3.5 });
 const LOW_B = pose({ lean: 0.55, head: -0.2, fThigh: 0.75, fShin: -0.1, bThigh: -0.45, bShin: -0.35, fUpper: 1.1, fFore: 1.05, bUpper: -0.7, bFore: -0.2, weapon: 0.75 });
-// Crouched variants.
-const CHIGH_A = pose({ ...P_CROUCH, fUpper: 0.6, fFore: 0.7, weapon: 0.9 });
-const CHIGH_B = pose({ ...P_CROUCH, lean: 0.45, fUpper: 2.1, fFore: 2.2, weapon: 2.4 });
-const CLOW_A = pose({ ...P_CROUCH, fUpper: 2.4, fFore: 2.8, weapon: 3.2 });
-const CLOW_B = pose({ ...P_CROUCH, lean: 0.95, fUpper: 1.25, fFore: 1.15, weapon: 1.0 });
+const TAU = Math.PI * 2;
+const STANCE = { fThigh: 0.35, fShin: 0.05, bThigh: -0.35, bShin: -0.12 };
+// Swing up #2: arm raised, the sword whirls a full circle over the head.
+const SPIN_A = pose({ ...STANCE, lean: -0.08, fUpper: 2.85, fFore: 3.05, bUpper: -0.7, bFore: -0.3, weapon: 1.6 });
+const SPIN_B = pose({ ...STANCE, lean: 0.05, fUpper: 2.75, fFore: 2.95, bUpper: -0.8, bFore: -0.4, weapon: 1.6 + TAU });
+// Swing up #3: big backhand arc over the top, from behind to the front.
+const BACK_A = pose({ ...STANCE, lean: -0.25, fUpper: 3.9, fFore: 4.2, bUpper: 0.6, bFore: 0.9, weapon: 4.6 });
+const BACK_B = pose({ ...STANCE, lean: 0.3, fUpper: 1.75, fFore: 1.6, bUpper: -0.8, bFore: -0.5, weapon: 1.65 });
+// Swing down #2: low whirl in front of the body.
+const LSPIN_A = pose({ lean: 0.45, fThigh: 0.7, fShin: -0.1, bThigh: -0.5, bShin: -0.3, fUpper: 1.1, fFore: 1.0, bUpper: -0.6, bFore: -0.2, weapon: 0.3 });
+const LSPIN_B = pose({ lean: 0.5, fThigh: 0.7, fShin: -0.1, bThigh: -0.5, bShin: -0.3, fUpper: 1.0, fFore: 0.95, bUpper: -0.6, bFore: -0.2, weapon: 0.3 + TAU });
+// Swing down #3: low thrust with a step.
+const STAB_A = pose({ ...STANCE, lean: -0.05, fUpper: -0.4, fFore: 0.6, bUpper: 0.4, bFore: 0.9, weapon: 1.2 });
+const STAB_B = pose({ lean: 0.7, head: -0.2, fThigh: 0.9, fShin: -0.1, bThigh: -0.6, bShin: -0.4, fUpper: 1.2, fFore: 1.15, bUpper: -0.9, bFore: -0.6, weapon: 1.05 });
+// Crouched: uppercut from the crouch (W) and a sweep along the ground (S).
+const CHIGH_A = pose({ ...P_CROUCH, fUpper: 0.4, fFore: 0.3, weapon: 0.2 });
+const CHIGH_B = pose({ ...P_CROUCH, lean: 0.25, head: 0, fUpper: 2.5, fFore: 2.7, weapon: 3.0 });
+const CLOW_A = pose({ ...P_CROUCH, fUpper: -0.4, fFore: -0.9, weapon: -1.45 });
+const CLOW_B = pose({ ...P_CROUCH, lean: 0.95, fUpper: 1.05, fFore: 1.45, weapon: 1.52 });
+// In the air: cleave from above (W) and a downward stab under the feet (S).
+const AIRH_A = pose({ ...P_JUMP, fUpper: 3.0, fFore: 3.3, weapon: 3.6 });
+const AIRH_B = pose({ ...P_JUMP, lean: 0.5, fUpper: 1.2, fFore: 1.0, weapon: 0.9 });
+const AIRL_A = pose({ ...P_JUMP, lean: -0.1, fUpper: 2.6, fFore: 2.9, weapon: 2.6 });
+const AIRL_B = pose({ lean: 0.25, fThigh: 1.3, fShin: 0.2, bThigh: 0.9, bShin: -0.3, fUpper: 0.25, fFore: 0.1, bUpper: -1.2, bFore: -0.8, weapon: 0.02, lift: 6 });
+// Guard and flip.
+const P_BLOCK = pose({ lean: -0.1, fThigh: 0.35, fShin: 0.1, bThigh: -0.4, bShin: -0.2, fUpper: 1.0, fFore: 2.3, bUpper: 0.6, bFore: 2.0, weapon: 3.0 });
+const P_CBLOCK = pose({ ...P_CROUCH, fUpper: 1.1, fFore: 2.4, bUpper: 0.6, bFore: 2.1, weapon: 3.1 });
+const P_TUCK = pose({ lean: 0.6, head: 0.3, fThigh: 2.0, fShin: 0.3, bThigh: 1.7, bShin: 0.0, fUpper: 1.2, fFore: 2.4, bUpper: 0.8, bFore: 2.2, weapon: 2.4 });
+
+const STAND_HIGH: [Pose, Pose][] = [[HIGH_A, HIGH_B], [SPIN_A, SPIN_B], [BACK_A, BACK_B]];
+const STAND_LOW: [Pose, Pose][] = [[LOW_A, LOW_B], [LSPIN_A, LSPIN_B], [STAB_A, STAB_B]];
+
+/** Shield points spent per point of blocked damage (lvl-1 medium zombie: 2 blocks hold, the 3rd breaks). */
+const BLOCK_COST = 3.4;
+const SHIELD_REGEN_DELAY = 1.5;
+const SHIELD_REGEN = 25;
+const FLIP_TIME = 0.5;
 
 export interface PlayerHost {
   playerSwing(player: Player, kind: SwingKind, box: Rect, hitOnce: Set<unknown>): void;
   playerDied(player: Player): void;
   dustAt(x: number, y: number, n: number): void;
+  /** Distance from x to the nearest hittable zombie's near edge in direction dir, or null. */
+  nearestAhead(x: number, dir: number): number | null;
 }
 
 export class Player {
@@ -72,7 +111,25 @@ export class Player {
   private time = 0;
   private walkPhase = 0;
   private cur: Pose = P_IDLE;
-  private attack: { kind: SwingKind; t: number; crouched: boolean; hit: Set<unknown>; swung: boolean } | null = null;
+  private attack: {
+    kind: SwingKind;
+    ctx: AttackCtx;
+    variant: number;
+    t: number;
+    hit: Set<unknown>;
+    swung: boolean;
+    lunge: boolean;
+  } | null = null;
+  maxShield = 100;
+  shield = 100;
+  blocking = false;
+  flipping = false;
+  /** Time of the last shield break (for the HUD flash). */
+  shieldBrokeAt = -9;
+  private lastBlockAt = -9;
+  private blockFlashUntil = 0;
+  private flipT = 0;
+  private flipUsed = false;
   private nextAttackAt = 0;
   private hurtUntil = 0;
   private invulnUntil = 0;
@@ -103,6 +160,9 @@ export class Player {
   get onGround() {
     return this.body.blocked.down;
   }
+  get shieldBrokenRecently() {
+    return this.time - this.shieldBrokeAt < 1.2;
+  }
   get invulnerable() {
     return this.god || this.time < this.invulnUntil || this.dead;
   }
@@ -112,12 +172,19 @@ export class Player {
     return { left: this.x - PLAYER_W / 2, right: this.x + PLAYER_W / 2, top: this.footY - h, bottom: this.footY };
   }
 
-  swingBox(kind: SwingKind, crouched: boolean): Rect {
+  swingBox(kind: SwingKind, crouched: boolean, ctx: AttackCtx = crouched ? 'crouch' : 'stand'): Rect {
     const near = this.x - this.facing * 10;
     const far = this.x + this.facing * this.weapon.range * FIG;
     const f = this.footY;
     let top: number, bottom: number;
-    if (crouched) {
+    if (ctx === 'air') {
+      if (kind === 'low') {
+        // downward stab: under and slightly in front of the player
+        const cx = this.x + this.facing * 12;
+        return { left: cx - 40 * FIG, right: cx + 40 * FIG, top: f - 30 * FIG, bottom: f + 95 * FIG };
+      }
+      [top, bottom] = [f - 130 * FIG, f - 15 * FIG];
+    } else if (crouched) {
       [top, bottom] = kind === 'high' ? [f - 80 * FIG, f - 28 * FIG] : [f - 50 * FIG, f + 4];
     } else {
       [top, bottom] = kind === 'high' ? [f - 132 * FIG, f - 72 * FIG] : [f - 70 * FIG, f + 4];
@@ -125,12 +192,28 @@ export class Player {
     return { left: Math.min(near, far), right: Math.max(near, far), top, bottom };
   }
 
-  damage(amount: number, fromDir: number) {
-    if (this.invulnerable) return false;
+  damage(amount: number, fromDir: number): HitResult {
+    if (this.invulnerable) return 'ignored';
+    if (this.blocking) {
+      const cost = amount * BLOCK_COST;
+      this.lastBlockAt = this.time;
+      if (this.shield >= cost) {
+        this.shield -= cost;
+        this.blockFlashUntil = this.time + 0.15;
+        this.body.setVelocityX(fromDir * 260);
+        sfx.block();
+        return 'blocked';
+      }
+      // Guard broken: the hit goes through.
+      this.shield = 0;
+      this.shieldBrokeAt = this.time;
+      sfx.guardBreak();
+    }
     this.hp = Math.max(0, this.hp - amount);
     this.invulnUntil = this.time + 0.9;
     this.hurtUntil = this.time + 0.28;
     this.attack = null;
+    this.blocking = false;
     this.body.setVelocity(fromDir * 260, -260);
     sfx.playerHurt();
     if (this.hp <= 0) {
@@ -139,7 +222,7 @@ export class Player {
       this.body.setVelocityX(fromDir * 200);
       this.host.playerDied(this);
     }
-    return true;
+    return 'hit';
   }
 
   heal(amount: number) {
@@ -150,6 +233,14 @@ export class Player {
     this.time += dt;
     const onGround = this.onGround;
     if (onGround) this.lastGroundAt = this.time;
+    if (onGround) this.flipUsed = false;
+    if (this.flipping && (onGround || this.flipT > FLIP_TIME + 0.25)) {
+      this.flipping = false;
+      this.cur = { ...this.cur, rot: 0 };
+    }
+    if (this.flipping) this.flipT += dt;
+    // Shield regenerates after a short pause without blocking.
+    if (this.time - this.lastBlockAt > SHIELD_REGEN_DELAY) this.shield = Math.min(this.maxShield, this.shield + SHIELD_REGEN * dt);
     if (onGround && !this.wasOnGround && !this.dead) {
       this.cur = { ...this.cur, lift: -4 };
       this.host.dustAt(this.x, this.footY, 8);
@@ -167,6 +258,7 @@ export class Player {
     const hurt = this.time < this.hurtUntil;
     const locked = this.time < this.lockUntil;
     this.crouching = input.down && onGround && !hurt;
+    this.blocking = input.block && onGround && !hurt && !this.attack && !this.flipping;
 
     // Horizontal movement.
     if (!hurt && !locked) {
@@ -176,6 +268,7 @@ export class Player {
       if (dirX !== 0 && !this.attack) this.facing = dirX;
       let speed = SPEED;
       if (this.crouching) speed = 0;
+      else if (this.blocking) speed *= 0.35;
       else if (this.attack && onGround) speed *= 0.3;
       const target = dirX * speed;
       const accel = onGround ? 18 : 9;
@@ -183,6 +276,8 @@ export class Player {
     } else if (onGround && hurt) {
       this.body.setVelocityX(this.body.velocity.x * 0.88);
     }
+    // Lunge: the target is a bit too far, take a step into the swing.
+    if (this.attack?.lunge && this.attack.t < 0.5 && onGround) this.body.setVelocityX(this.facing * 430);
 
     // Jumping (with a little buffer + coyote time so it feels fair).
     if (input.jumpPressed) this.jumpBufferedAt = this.time;
@@ -196,6 +291,18 @@ export class Player {
         this.lastGroundAt = -1;
         sfx.jump();
         this.host.dustAt(this.x, this.footY, 5);
+      } else if (input.jumpPressed && !touchingLeft && !touchingRight && !this.flipUsed && !this.flipping && (input.left || input.right)) {
+        // Flip: a somersault that flies further and passes through zombies.
+        const dir = input.left && input.right ? this.facing : input.right ? 1 : -1;
+        this.flipping = true;
+        this.flipUsed = true;
+        this.flipT = 0;
+        this.attack = null;
+        this.facing = dir;
+        this.body.setVelocity(dir * 560, Math.min(this.body.velocity.y, -520));
+        this.lockUntil = this.time + FLIP_TIME;
+        this.jumpBufferedAt = -1;
+        sfx.flip();
       } else if (touchingLeft || touchingRight) {
         // Bounce off the wall.
         const away = touchingLeft ? 1 : -1;
@@ -209,11 +316,20 @@ export class Player {
     }
 
     // Attacks.
-    if (!this.attack && !hurt && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
+    if (!this.attack && !hurt && !this.flipping && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
       const kind: SwingKind = input.swingHigh ? 'high' : 'low';
-      this.attack = { kind, t: 0, crouched: this.crouching, hit: new Set(), swung: false };
+      const ctx: AttackCtx = !onGround ? 'air' : this.crouching ? 'crouch' : 'stand';
+      let lunge = false;
+      if (ctx === 'stand') {
+        const d = this.host.nearestAhead(this.x, this.facing);
+        const reach = this.weapon.range * FIG;
+        lunge = d !== null && d > reach - 12 && d < reach + 80;
+      }
+      this.attack = { kind, ctx, variant: Math.floor(Math.random() * 3), t: 0, hit: new Set(), swung: false, lunge };
+      this.blocking = false;
       this.nextAttackAt = this.time + this.weapon.swingMs / 1000 + 0.04;
       this.trailPts = [];
+      if (ctx === 'air' && kind === 'low') this.body.setVelocityY(Math.max(this.body.velocity.y, 0) + 380);
     }
     if (this.attack) {
       const a = this.attack;
@@ -223,7 +339,7 @@ export class Player {
         sfx.swing(this.weapon.id === 'axe');
       }
       if (a.t >= this.weapon.activeFrom && a.t <= this.weapon.activeTo) {
-        this.host.playerSwing(this, a.kind, this.swingBox(a.kind, a.crouched), a.hit);
+        this.host.playerSwing(this, a.kind, this.swingBox(a.kind, a.ctx === 'crouch', a.ctx), a.hit);
       }
       if (a.t >= 1) this.attack = null;
     }
@@ -231,18 +347,29 @@ export class Player {
     // Pose.
     if (this.attack) {
       const a = this.attack;
-      const [A, B] = a.crouched ? (a.kind === 'high' ? [CHIGH_A, CHIGH_B] : [CLOW_A, CLOW_B]) : a.kind === 'high' ? [HIGH_A, HIGH_B] : [LOW_A, LOW_B];
+      const [A, B] =
+        a.ctx === 'crouch' ? (a.kind === 'high' ? [CHIGH_A, CHIGH_B] : [CLOW_A, CLOW_B])
+        : a.ctx === 'air' ? (a.kind === 'high' ? [AIRH_A, AIRH_B] : [AIRL_A, AIRL_B])
+        : a.kind === 'high' ? STAND_HIGH[a.variant] : STAND_LOW[a.variant];
       // quick wind-up into A, fast swing to B, settle.
       let p: Pose;
       const w = this.weapon.activeFrom;
       if (a.t < w) p = lerpPose(this.cur, A, ease.out(a.t / w));
       else if (a.t < this.weapon.activeTo) p = lerpPose(A, B, ease.out((a.t - w) / (this.weapon.activeTo - w)));
       else p = B;
-      if (!onGround) p = { ...p, fThigh: P_JUMP.fThigh, fShin: P_JUMP.fShin, bThigh: P_JUMP.bThigh, bShin: P_JUMP.bShin };
+      if (!onGround && a.ctx !== 'air') p = { ...p, fThigh: P_JUMP.fThigh, fShin: P_JUMP.fShin, bThigh: P_JUMP.bThigh, bShin: P_JUMP.bShin };
       this.cur = p;
     } else {
       let target: Pose;
+      if (this.flipping) {
+        // Tuck and spin a full turn.
+        const r = Math.min(1, this.flipT / FLIP_TIME) * TAU;
+        this.cur = { ...lerpPose(this.cur, P_TUCK, 1 - Math.exp(-dt * 30)), rot: r };
+        this.draw();
+        return;
+      }
       if (hurt) target = P_HURT;
+      else if (this.blocking) target = this.crouching ? P_CBLOCK : P_BLOCK;
       else if (!onGround) target = this.body.velocity.y < 0 ? P_JUMP : P_FALL;
       else if (this.crouching) target = P_CROUCH;
       else if (Math.abs(this.body.velocity.x) > 30) target = this.walkPose(dt);
@@ -278,13 +405,21 @@ export class Player {
     const g = this.gfx;
     g.clear();
     const blink = this.time < this.invulnUntil && !this.dead && Math.floor(this.time * 18) % 2 === 0;
-    const pts = drawFigure(g, this.x, this.footY, this.facing, FIG, this.cur, {
+    // A flip rotates around the body's centre, not around the feet.
+    let ox = 0, oy = 0;
+    if (this.flipping) {
+      const r = this.cur.rot, h = 32;
+      ox = -h * Math.sin(r) * this.facing * FIG;
+      oy = (-h + h * Math.cos(r)) * FIG;
+    }
+    const pts = drawFigure(g, this.x + ox, this.footY + oy, this.facing, FIG, this.cur, {
       kind: 'player',
       weapon: this.weapon.id,
       headgear: this.profile.headgear,
       time: this.time,
       vx: this.body.velocity.x,
       alpha: blink ? 0.35 : 1,
+      flash: this.time < this.blockFlashUntil,
     });
     // Weapon swoosh.
     this.trail.clear();

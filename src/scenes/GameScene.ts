@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {
-  ARENA_LEFT, ARENA_RIGHT, BLOOD, BLOOD_DARK, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex,
+  ARENA_LEFT, ARENA_RIGHT, BLOOD, FIG, BLOOD_DARK, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex,
 } from '../game/constants';
 import { CHAPTERS, buildLevel, type LevelDef, type ZombieSize } from '../game/data';
 import { drawBackground } from '../game/background';
@@ -114,7 +114,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.keys = kb.addKeys({
       w: 'W', a: 'A', s: 'S', d: 'D',
       up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT',
-      esc: 'ESC', m: 'M',
+      space: 'SPACE', esc: 'ESC', m: 'M',
     }) as Record<string, Phaser.Input.Keyboard.Key>;
     kb.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
 
@@ -177,7 +177,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const mute = txt(WIDTH - 24, HEIGHT - 34, 'SOUND OFF (M)', 18).setOrigin(1, 0).setVisible(sfx.muted);
     this.hud = { hp, score, combo, level, wave, banner, sub, hint, mute };
     if (this.chapter === 0 && this.levelIdx === 0) {
-      hint.setText('A / D or ← →  move    ↑  jump (also off walls)    ↓  duck    W  swing up    S  swing down    Esc  pause');
+      hint.setText('← →  move    ↑ / Space  jump (again in air = flip)    ↓  duck    W  swing up    S  swing down    A / D  block    Esc  pause');
       hint.setAlpha(1);
       this.tweens.add({ targets: hint, alpha: 0, delay: 14000, duration: 1500 });
     }
@@ -243,15 +243,17 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
 
     const input: PlayerInput = {
-      left: k.a.isDown || k.left.isDown,
-      right: k.d.isDown || k.right.isDown,
+      // Arrows (+ Space) move, WASD fights: W / S swing, A / D guard.
+      left: k.left.isDown,
+      right: k.right.isDown,
       down: k.down.isDown,
-      jumpPressed: JD(k.up),
+      jumpPressed: JD(k.up) || JD(k.space),
       swingHigh: JD(k.w),
       swingLow: JD(k.s),
+      block: k.a.isDown || k.d.isDown,
     };
     if (this.phase === 'over') {
-      input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = false;
+      input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
     }
     this.player.update(dt, input);
 
@@ -278,9 +280,22 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   /** The player can't walk through zombies – jump over them instead. */
+  /** Distance to the nearest hittable zombie ahead (near edge), used for the lunge. */
+  nearestAhead(x: number, dir: number): number | null {
+    let best: number | null = null;
+    for (const z of this.zombies) {
+      if (!z.hittable) continue;
+      const hb = z.hurtbox();
+      const edge = dir > 0 ? hb.left : hb.right;
+      const d = (edge - x) * dir;
+      if (d > 0 && (best === null || d < best)) best = d;
+    }
+    return best;
+  }
+
   private separatePlayer() {
     const p = this.player;
-    if (p.dead) return;
+    if (p.dead || p.flipping) return; // a flip passes through zombies
     const pr = p.hurtbox();
     for (const z of this.zombies) {
       if (!z.alive || z.state === 'rising') continue;
@@ -509,7 +524,13 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   zombieStrike(z: Zombie, band: Rect) {
     if (this.player.dead || this.phase === 'cleared') return;
     if (!overlap(band, this.player.hurtbox())) return;
-    if (this.player.damage(z.damage, z.facing)) {
+    const res = this.player.damage(z.damage, z.facing);
+    if (res === 'blocked') {
+      const hb = this.player.hurtbox();
+      this.impact(this.player.x + this.player.facing * 22 * FIG, hb.top + 30 * FIG, 1.1);
+      this.dustAt(this.player.x + this.player.facing * 22 * FIG, hb.top + 35 * FIG, 5);
+      this.cameras.main.shake(80, 0.003);
+    } else if (res === 'hit') {
       const hb = this.player.hurtbox();
       this.spill(this.player.x, hb.top + 30, z.facing, 18);
       this.cameras.main.shake(160, 0.007);
@@ -649,8 +670,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     for (const z of this.zombies) {
       if (z.state !== 'windup') continue;
       if (z.size === 'small') this.tip('jump', 'Small zombies bite your legs — JUMP (↑)!\nOnly a DOWN swing (S) reaches them.');
-      else this.tip('duck', 'This one swings high — DUCK (hold ↓)!\nYou can swing while ducking.');
+      else this.tip('duck', 'This one swings high — DUCK (hold ↓) or BLOCK (hold A / D)!\nThe shield bar wears down and refills.');
     }
+    if (this.zombies.some((z) => z.size === 'big' && z.state === 'walk')) this.tip('flip', 'Too big to jump over? Jump, then press ↑ again while holding ← or →\nto FLIP right through it!');
     if (this.zombies.some((z) => z.size === 'giant' && z.state === 'walk')) this.tip('giant', 'A GIANT! Duck its swing and keep hitting.\nSwing UP (W) does more damage.');
     if (this.levelIdx === 0 && this.phase === 'between' && this.waveIdx === 0) this.tip('wall', 'Tip: jump into a wall, then press ↑ again to bounce off it!');
   }
@@ -678,6 +700,18 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     for (let i = x + w * frac; i < x + w; i += 6) hp.lineBetween(i, y + h, Math.min(i + 6, x + w), y);
     hp.lineStyle(3, INK, 1);
     hp.strokeRect(x, y, w, h);
+    // Shield bar under the health bar: grey, hatched when empty, flashes red when broken.
+    const sy = y + h + 6, sh = 10;
+    const sf = this.player.shield / this.player.maxShield;
+    const broke = !this.player.dead && this.player.shieldBrokenRecently;
+    hp.fillStyle(0xffffff, 1);
+    hp.fillRect(x, sy, w, sh);
+    hp.fillStyle(this.player.blocking ? INK : 0x777777, 1);
+    hp.fillRect(x, sy, w * sf, sh);
+    hp.lineStyle(1, INK, 0.3);
+    for (let i = x + w * sf; i < x + w; i += 5) hp.lineBetween(i, sy + sh, Math.min(i + 5, x + w), sy);
+    hp.lineStyle(2, broke && Math.floor(this.time.now / 120) % 2 ? BLOOD : INK, 1);
+    hp.strokeRect(x, sy, w, sh);
     score.setText(String(this.score).padStart(6, '0'));
     combo.setText(this.combo > 1 && this.comboTimer > 0 ? `COMBO x${Math.min(this.combo, 5)}` : '');
     const total = this.level.waves.length;

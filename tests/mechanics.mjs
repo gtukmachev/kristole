@@ -59,5 +59,42 @@ await sleep(2500);
 await page.evaluate(() => window.dispatchEvent(new Event('blur')));
 await sleep(300);
 ok(await page.evaluate(() => window.__kristole.scene.isPaused('Game') && window.__kristole.scene.isActive('Pause')), 'auto-pause on window blur');
+// v2: block with A, shield drains on blocked hits; flip passes through zombies
+await page.goto(`http://localhost:${PORT}/?scene=game&chapter=0&level=0`);
+await sleep(600);
+const pState = () => page.evaluate(() => { const p = window.__scene.player; return { shield: Math.round(p.shield), hp: p.hp, blocking: p.blocking, flipping: p.flipping, x: Math.round(p.x) }; });
+await page.keyboard.down('KeyA');
+let blockedOnce = false, minShield = 100;
+for (let i = 0; i < 80; i++) {
+  await sleep(150);
+  const st = await pState();
+  if (st.blocking && st.shield < 100) blockedOnce = true;
+  minShield = Math.min(minShield, st.shield);
+  // keep facing the nearest zombie
+  const z = (await snap()).zombies.find((q) => q.state !== 'dying' && q.state !== 'rising');
+  if (z && Math.abs(z.x - st.x) > 100) { const k = z.x > st.x ? 'ArrowRight' : 'ArrowLeft'; await page.keyboard.down(k); await sleep(120); await page.keyboard.up(k); }
+  if (minShield < 30) break;
+}
+await page.keyboard.up('KeyA');
+const after = await pState();
+ok(blockedOnce, `blocking spends shield (min shield ${minShield}, hp ${after.hp})`);
+await sleep(2600);
+ok((await pState()).shield > minShield, 'shield regenerates');
+// flip: jump, then jump again while holding a direction
+await page.goto(`http://localhost:${PORT}/?scene=game&chapter=0&level=0&god=1`);
+await sleep(600);
+const x0 = (await pState()).x;
+await page.keyboard.down('ArrowRight');
+await hold('Space', 40);
+await sleep(120);
+await hold('ArrowUp', 40);
+await sleep(100);
+const fl = await pState();
+await page.screenshot({ path: 'tests/shots/flip.png' });
+await sleep(700);
+await page.keyboard.up('ArrowRight');
+const x1 = (await pState()).x;
+ok(fl.flipping, 'second jump in the air starts a flip');
+ok(x1 - x0 > 320, `flip carries further (moved ${x1 - x0}px)`);
 console.log(errors.length ? 'ERRORS: ' + errors.join('\n') : 'no page errors');
 await browser.close(); server.kill();
