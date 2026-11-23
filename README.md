@@ -4,6 +4,12 @@
 
 **Play:** https://gtukmachev.github.io/kristole/
 
+## Roadmap
+
+- **Game versions** — `plan/vN.md` (the next one: `plan/v6.md`).
+- **Future phase: publishing & monetization** (Google Play, App Store, web game portals; legal, money, multiplatform build,
+  phones and touch controls). Not started yet — ideas only, collected in [`publishing/`](publishing/README.md), kept apart from game development.
+
 ## Run locally
 
 ```bash
