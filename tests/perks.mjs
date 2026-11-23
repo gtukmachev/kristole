@@ -37,7 +37,9 @@ ok(s.level === 0 && s.place === 'cliffFoot' && sum(s.perks) === 1, `walked into 
 
 // 2. hidden secret: the birds on the first level fly off when you come close -> a perk drops
 await go('chapter=0&level=0');
-await hold('ArrowRight', 1500);
+await page.keyboard.down('ArrowRight');
+s = await waitFor((x) => x.secrets.find((q) => q.kind === 'birds')?.done, 4000);
+await page.keyboard.up('ArrowRight');
 await sleep(600);
 s = await snap();
 ok(s.secrets.find((x) => x.kind === 'birds')?.done === true, 'scared the birds away');
@@ -63,8 +65,9 @@ ok(s.spears >= 1, 'W throws a spear while SPEAR is on');
 await page.screenshot({ path: 'tests/shots/v4-spear.png' });
 // ghost flies
 await tap('8');
-await hold('ArrowUp', 900);
-s = await snap();
+await page.keyboard.down('ArrowUp');
+s = await waitFor((x) => x.player.y < 450, 3000);
+await page.keyboard.up('ArrowUp');
 ok(s.perksOn.includes('ghost') && s.player.y < 450, `GHOST flies up (y=${s.player.y})`);
 await page.screenshot({ path: 'tests/shots/v4-ghost.png' });
 await page.evaluate(() => { const sc = window.__scene; sc.player.god = false; sc.player.damage(30, 1); });
