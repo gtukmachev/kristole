@@ -118,7 +118,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private angel?: Angel;
   private dawn?: DawnFx;
   private ash!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private digitKeys: Phaser.Input.Keyboard.Key[] = [];
+  /** Perk slots pressed since the last frame (by physical key, so any layout and the numpad work). */
+  private perkPresses: number[] = [];
 
   constructor() {
     super('Game');
@@ -195,7 +196,17 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT',
       space: 'SPACE', esc: 'ESC', m: 'M',
     }) as Record<string, Phaser.Input.Keyboard.Key>;
-    this.digitKeys = PERKS.map((p) => kb.addKey(p.key === '0' ? 'ZERO' : ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'][Number(p.key) - 1]));
+    this.perkPresses = [];
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      // Digit1 / Numpad1 … ; fall back to the typed character
+      const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code ?? '') ?? /^(\d)$/.exec(e.key ?? '');
+      if (!m) return;
+      const slot = PERKS.findIndex((p) => p.key === m[1]);
+      if (slot >= 0) this.perkPresses.push(slot);
+    };
+    kb.on('keydown', onKey);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => kb.off('keydown', onKey));
     kb.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
 
     const bloodCfg = (angle: { min: number; max: number }): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig => ({
@@ -248,6 +259,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       // Don't let keys that were held while paused leak into the game.
       kb.resetKeys();
+      this.perkPresses = [];
     });
 
     sfx.playMusic('game');
@@ -352,7 +364,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       return;
     }
 
-    for (let i = 0; i < this.digitKeys.length; i++) if (JD(this.digitKeys[i])) this.activatePerk(i);
+    for (const i of this.perkPresses.splice(0)) this.activatePerk(i);
     this.updatePerks(realDt);
 
     const input: PlayerInput = {
@@ -627,7 +639,13 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private activatePerk(i: number) {
     if (this.player.dead || this.phase === 'over' || this.perkCounts[i] <= 0 || this.perkLeft[i] > 0) {
-      if (this.perkCounts[i] <= 0 && !this.player.dead) sfx.denied();
+      if (this.perkCounts[i] <= 0 && !this.player.dead) {
+        // empty slot: say which keys do have a perk
+        sfx.denied();
+        this.perkBar.deny(i);
+        const have = PERKS.filter((_p, j) => this.perkCounts[j] > 0).map((p) => `${p.key} – ${p.name}`);
+        this.popText(this.player.x, this.player.hurtbox().top - 30, have.length ? `Slot ${PERKS[i].key} is empty. Press ${have.join(', ')}` : 'No perks yet');
+      }
       return;
     }
     const def = PERKS[i];

@@ -80,6 +80,17 @@ export class PerkBar {
     });
   }
 
+  /** Empty slot pressed: a short shake with a cross. */
+  deny(i: number) {
+    const { x, y } = this.slotPos(i);
+    const g = this.scene.add.graphics().setDepth(103).setScrollFactor(0).setPosition(x, y);
+    g.lineStyle(4, ACC.main, 1);
+    g.lineBetween(-10, -10, 10, 10);
+    g.lineBetween(10, -10, -10, 10);
+    this.scene.tweens.add({ targets: g, x: x + 5, duration: 40, yoyo: true, repeat: 3 });
+    this.scene.tweens.add({ targets: g, alpha: 0, delay: 500, duration: 300, onComplete: () => g.destroy() });
+  }
+
   /** Slot bounces when a perk lands in it. */
   pop(i: number) {
     const { x, y } = this.slotPos(i);
