@@ -189,7 +189,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
     this.player.hp = this.startHp;
     this.player.god = params.has('god');
-    if (params.has('debug')) this.debugG = this.add.graphics().setDepth(200);
+    if (params.has('hitboxes')) this.debugG = this.add.graphics().setDepth(200);
 
     const kb = this.input.keyboard!;
     this.keys = kb.addKeys({

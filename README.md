@@ -86,6 +86,7 @@ Test helpers (Playwright, start their own dev server):
 URL shortcuts:
 - `/<chapter>/<level>` (1-based) jumps straight into a level, e.g. `http://localhost:5173/2/3` or
   `https://gtukmachev.github.io/kristole/2/3` (Pages serves the game from `404.html` for such paths); level `0` = the chapter's perk pick
-- `?scene=game&chapter=1&level=2&weapon=axe` (0-based, `level=-1` = perk pick), `&god=1` (no damage), `&debug=1` (hitboxes),
+- `?scene=game&chapter=1&level=2&weapon=axe` (0-based, `level=-1` = perk pick), `&god=1` (no damage), `&hitboxes=1` (hitboxes),
   `&perks=1111111111` (perk counts per slot 1…0)
+- `?debug=true` – service panel with a log of pressed keys (key / code / keyCode) and what the game did with them
 - `node tests/deeplink.mjs` checks the deep links on the dev server and the production build

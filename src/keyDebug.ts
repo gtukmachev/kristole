@@ -1,5 +1,5 @@
 /**
- * Floating key log for hunting keyboard problems: open the game with `?keys` (or press F9 to toggle).
+ * Service panel: floating key log for hunting keyboard problems. Only with `?debug=true` in the URL.
  * Shows every key press (key / code / keyCode) and what the game did with it.
  */
 const MAX = 10;
@@ -8,7 +8,7 @@ const lines: string[] = [];
 
 function render() {
   if (!panel) return;
-  panel.textContent = ['KEY LOG (F9 hides)', ...lines].join('\n');
+  panel.textContent = ['KEY LOG (debug)', ...lines].join('\n');
 }
 
 function show(on: boolean) {
@@ -36,12 +36,9 @@ export function keyLog(msg: string) {
 }
 
 export function installKeyDebug() {
-  show(new URLSearchParams(window.location.search).has('keys'));
+  if (new URLSearchParams(window.location.search).get('debug') !== 'true') return;
+  show(true);
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'F9') {
-      show(!panel);
-      return;
-    }
     keyLog(`down  key=${JSON.stringify(e.key)}  code=${e.code || '-'}  keyCode=${e.keyCode}${e.repeat ? '  (repeat)' : ''}${e.shiftKey ? '  +shift' : ''}`);
   }, true);
   (window as unknown as { __keyLog: typeof keyLog }).__keyLog = keyLog;

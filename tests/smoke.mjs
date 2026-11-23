@@ -33,7 +33,7 @@ try {
     await shot('game-' + bg);
   }
   // play chapter 1 level 1 a bit: walk, jump, swing
-  await page.goto(`${base}?scene=game&chapter=0&level=0&debug=1`);
+  await page.goto(`${base}?scene=game&chapter=0&level=0&hitboxes=1`);
   await sleep(2600);
   await shot('play-0');
   for (let i = 0; i < 40; i++) {
