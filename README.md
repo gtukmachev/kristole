@@ -45,7 +45,7 @@ Menus also work with the mouse.
 
 ## How it plays
 
-- One player against waves of zombies. Every level is **its own place** with 2 waves; then an exit opens (GO →),
+- One player against waves of zombies. Every level is **its own place** with 4 waves; then an exit opens (GO →),
   you walk into it and the world slides on to the next place. Each place has its own way zombies arrive:
   out of the earth, cave mouths, crypt doors, coffins, barrels, cabinets, armour stands, dropping from ledges and
   chapel windows, or floating down on parachutes.

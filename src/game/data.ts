@@ -110,7 +110,7 @@ export function buildLevel(chapter: number, level: number): LevelDef {
   const ch = CHAPTERS[chapter];
   const n = chapter * 5 + level; // overall difficulty step 0..14
   const rand = rng(1000 + n * 97);
-  const waveCount = 2; // v3: two waves per level, then you move on to a new place
+  const waveCount = 4; // v4.1: four waves per level, then you move on to a new place
   const waves: WaveDef[] = [];
   for (let w = 0; w < waveCount; w++) {
     const count = 4 + n + w * 2;
