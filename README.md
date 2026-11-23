@@ -37,6 +37,7 @@ To redeploy a release by hand: Actions → "Release & deploy to GitHub Pages" �
 | W | swing up (3 random animations standing; own moves when jumping / ducking) |
 | S | swing down (in the air: stab downward) |
 | A or D (hold) | **block**: the sword folds away and a shield unfolds; blocked hits cost shield (grey bar), which always refills |
+| 1 … 9, 0 | switch on a **perk** from its slot (top of the screen) |
 | Esc | pause / menu |
 | M | sound on / off |
 
@@ -48,7 +49,16 @@ Menus also work with the mouse.
   you walk into it and the world slides on to the next place. Each place has its own way zombies arrive:
   out of the earth, cave mouths, crypt doors, coffins, barrels, cabinets, armour stands, dropping from ledges and
   chapel windows, or floating down on parachutes.
-- **Red hearts** heal +25: one waits on a ledge in every place (jump / wall-bounce / flip up to it), and killed zombies
+- **Perks** (v4): 10 slots at the top, keys 1…0, from weakest to strongest: Sharp blade, Freeze, Long sword,
+  Spear, Invisible, Berserk, Cocoon, Ghost, Angel, Dawn. A perk is spent when switched on and works for ~10 seconds.
+  You get them three ways:
+  - every chapter starts with **level 0**: three free perks (out of the first five), take one;
+  - **hidden** in each place: things that wobble (pots, skulls, crates), candle pairs to put out, birds to scare away;
+  - dropped by zombies: never by small ones, sometimes by medium and big ones, **three** from every giant.
+  Perks stay with you from place to place and chapter to chapter until you die.
+- Chapters run back to back: from the last place of a chapter you walk straight into the next chapter.
+- Each chapter has its own **accent colour** (blood, hearts, perks, thin strokes in the scenery): red cliff, purple graveyard, green castle.
+- **Hearts** heal +25: one waits on a ledge in every place (jump / wall-bounce / flip up to it), and killed zombies
   sometimes drop one (big ones more often).
 - Zombies come in sizes: **small** ones are fast and bite low (jump over them; only a **down** swing reaches them),
   **medium** and **big** ones swing high (duck under it). The last wave of a chapter brings a **giant**.
@@ -58,7 +68,7 @@ Menus also work with the mouse.
 - If a zombie is a little out of reach, a standing swing lunges forward.
 - Points for every zombie, combo multiplier for quick kills, bonus for each level.
 - 3 chapters × 5 places: The Cliff (foot, cave entrance, inside the cave, cliff path, summit), The Graveyard
-  (gates, crypts, chapel, open graves, mausoleum), The Castle (drawbridge, courtyard, armory, ramparts, throne room). Finishing a chapter unlocks the next one.
+  (gates, crypts, chapel, open graves, mausoleum), The Castle (drawbridge, courtyard, armory, ramparts, throne room). Reaching a chapter unlocks it in the menu.
 - Leaderboard, avatar name and progress are stored in the browser (localStorage).
 - Chapter one shows short beginner tips (once). Zombies dress differently per chapter.
 
@@ -72,8 +82,10 @@ Test helpers (Playwright, start their own dev server):
 - `node tests/mechanics.mjs` – wall jump, crouch, pause / resume / restart
 - `node tests/playthrough.mjs [levels] [chapter]` – a bot plays (`GOD=1` no damage, `SMART=1` bot ducks and jumps)
 - `node tests/variants.mjs` – screenshots of every chapter + beginner tip
+- `node tests/perks.mjs` – level 0 pick, perk keys, spear / ghost / freeze / dawn, hidden secrets, chapter → chapter
 URL shortcuts:
 - `/<chapter>/<level>` (1-based) jumps straight into a level, e.g. `http://localhost:5173/2/3` or
-  `https://gtukmachev.github.io/kristole/2/3` (Pages serves the game from `404.html` for such paths)
-- `?scene=game&chapter=1&level=2&weapon=axe` (0-based), `&god=1` (no damage), `&debug=1` (hitboxes)
+  `https://gtukmachev.github.io/kristole/2/3` (Pages serves the game from `404.html` for such paths); level `0` = the chapter's perk pick
+- `?scene=game&chapter=1&level=2&weapon=axe` (0-based, `level=-1` = perk pick), `&god=1` (no damage), `&debug=1` (hitboxes),
+  `&perks=1111111111` (perk counts per slot 1…0)
 - `node tests/deeplink.mjs` checks the deep links on the dev server and the production build

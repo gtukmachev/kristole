@@ -1,6 +1,9 @@
-import { ARENA_LEFT, ARENA_RIGHT, GROUND_Y, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
+import { ACCENTS, ARENA_LEFT, ARENA_RIGHT, GROUND_Y, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
 import { P, castle, cliff, deadTree, graveyard, hatch, paper, penLine, rng, type G } from './background';
-import type { PlaceDef, Platform } from './places';
+import { chapterOfPlace, type PlaceDef, type Platform } from './places';
+
+/** Accent of the place being painted (each chapter has its own colour). */
+let ACCENT = ACCENTS[0].main;
 
 const GY = GROUND_Y;
 const STONE = 0xe2e1db;
@@ -202,6 +205,11 @@ function moon(g: G, x: number, y: number) {
   g.strokeCircle(x, y, 46);
   g.fillStyle(PAPER, 1);
   g.fillCircle(x + 24, y - 14, 40);
+  // a thin accent rim on the lit edge
+  g.lineStyle(3, ACCENT, 0.8);
+  g.beginPath();
+  g.arc(x, y, 50, 1.9, 4.3, false);
+  g.strokePath();
 }
 
 function hills(g: G, rand: () => number, y0: number, amp: number, color = INK_FAINT) {
@@ -213,7 +221,28 @@ function hills(g: G, rand: () => number, y0: number, amp: number, color = INK_FA
 
 // ---------------------------------------------------------------- places
 
+/** Level 0: a quiet place before the chapter, with a signpost. */
+function camp(g: G, p: PlaceDef, scenery: (g: G) => void, style: 'rock' | 'stone') {
+  scenery(g);
+  for (const pl of p.platforms) ledge(g, pl, style);
+  // signpost pointing on
+  g.lineStyle(5, INK, 1);
+  g.lineBetween(1110, GY, 1110, GY - 120);
+  const sign = [{ x: 1060, y: GY - 120 }, { x: 1150, y: GY - 120 }, { x: 1172, y: GY - 102 }, { x: 1150, y: GY - 84 }, { x: 1060, y: GY - 84 }];
+  g.fillStyle(0xf7f7f2, 1);
+  g.fillPoints(P(sign), true);
+  g.lineStyle(3.5, INK, 1);
+  g.strokePoints(P(sign), true);
+  g.lineStyle(3, ACCENT, 1);
+  g.lineBetween(1080, GY - 102, 1140, GY - 102);
+  g.lineBetween(1140, GY - 102, 1128, GY - 112);
+  g.lineBetween(1140, GY - 102, 1128, GY - 92);
+}
+
 const painters: Record<PlaceDef['id'], (g: G, p: PlaceDef) => void> = {
+  trailhead: (g, p) => camp(g, p, cliff, 'rock'),
+  graveLane: (g, p) => camp(g, p, graveyard, 'stone'),
+  castleRoad: (g, p) => camp(g, p, castle, 'stone'),
   cliffFoot: (g, p) => {
     cliff(g);
     ledge(g, p.platforms[0], 'rock');
@@ -508,7 +537,13 @@ const painters: Record<PlaceDef['id'], (g: G, p: PlaceDef) => void> = {
 };
 
 export function drawPlace(g: G, place: PlaceDef) {
+  ACCENT = ACCENTS[chapterOfPlace(place.id)].main;
   painters[place.id](g, place);
+  // Accent touches: a thin coloured line along each ledge top, next to the ink outline.
+  for (const pl of place.platforms) {
+    g.lineStyle(2.5, ACCENT, 0.85);
+    g.lineBetween(pl.x - pl.w / 2 + 4, pl.y + 4, pl.x + pl.w / 2 - 4, pl.y + 4);
+  }
   // a little pen grain over everything so all places share the paper look
   const rand = rng(5);
   for (let i = 0; i < 120; i++) {

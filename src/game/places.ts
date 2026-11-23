@@ -7,10 +7,11 @@ import { GROUND_Y } from './constants';
 export type PlaceId =
   | 'cliffFoot' | 'caveDoor' | 'caveInside' | 'cliffPath' | 'summit'
   | 'graveGates' | 'crypts' | 'chapel' | 'openGraves' | 'mausoleum'
-  | 'moat' | 'courtyard' | 'armory' | 'ramparts' | 'throne';
+  | 'moat' | 'courtyard' | 'armory' | 'ramparts' | 'throne'
+  | 'trailhead' | 'graveLane' | 'castleRoad';
 
 /** How zombies enter: rise from the earth, come out of a spot (door, coffin, barrel…), drop from above, or parachute in. */
-export type Entrance = 'rise' | 'spot' | 'drop' | 'parachute';
+export type Entrance = 'rise' | 'spot' | 'drop' | 'parachute' | 'none';
 
 /** What a spawn spot looks like when it opens. */
 export type SpotKind = 'cave' | 'door' | 'crypt' | 'coffin' | 'barrel' | 'cabinet' | 'armor' | 'throne' | 'mausoleum' | 'edge' | 'ledge' | 'window';
@@ -35,7 +36,7 @@ export interface PlaceDef {
   spots: Spot[];
   platforms: Platform[];
   /** Where the bonus heart waits (usually on a ledge you have to jump to). */
-  heart: { x: number; y: number };
+  heart?: { x: number; y: number };
   /** Exit shown after the level is cleared. */
   exit: 'door' | 'cave' | 'path' | 'gate' | 'stairs';
 }
@@ -115,3 +116,27 @@ export const PLACES: PlaceDef[][] = [
     },
   ],
 ];
+
+
+/**
+ * Level 0 of every chapter (v4): no zombies, three free perks to choose from – one on the ground,
+ * one on a low ledge and one up high (jump from ledge to ledge). Then a portal opens.
+ */
+const CAMP_PLATFORMS: Platform[] = [{ x: 430, y: G - 170, w: 160 }, { x: 770, y: G - 300, w: 150 }];
+export const CAMP_PERK_SPOTS = [{ x: 1000, y: G - 60 }, { x: 430, y: G - 215 }, { x: 770, y: G - 345 }];
+export const CAMPS: PlaceDef[] = [
+  { id: 'trailhead', name: 'The Trailhead', entrance: 'none', spots: [], platforms: CAMP_PLATFORMS, exit: 'path' },
+  { id: 'graveLane', name: 'Cemetery Lane', entrance: 'none', spots: [], platforms: CAMP_PLATFORMS, exit: 'gate' },
+  { id: 'castleRoad', name: 'The Castle Road', entrance: 'none', spots: [], platforms: CAMP_PLATFORMS, exit: 'gate' },
+];
+
+/** Place of a level; level -1 is the chapter's camp (level 0 in the design). */
+export function placeOf(chapter: number, level: number): PlaceDef {
+  return level < 0 ? CAMPS[chapter] : PLACES[chapter][level];
+}
+
+/** Which chapter a place belongs to (for its accent colour). */
+export function chapterOfPlace(id: PlaceId): number {
+  for (let c = 0; c < PLACES.length; c++) if (CAMPS[c].id === id || PLACES[c].some((p) => p.id === id)) return c;
+  return 0;
+}

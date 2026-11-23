@@ -11,6 +11,7 @@ const cases = [
   ['http://localhost:5190/2/3', 'chapel'],
   ['http://localhost:5190/1/1', 'cliffFoot'],
   ['http://localhost:5190/3/5/', 'throne'],
+  ['http://localhost:5190/2/0', 'graveLane'],
   ['http://localhost:5189/kristole/3/2', 'courtyard'],
 ];
 for (const [url, want] of cases) {

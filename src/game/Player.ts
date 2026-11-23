@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA_LEFT, ARENA_RIGHT, FIG, GROUND_Y, INK, INK_FAINT, INK_SOFT } from './constants';
+import { ACC, ARENA_LEFT, ARENA_RIGHT, FIG, GROUND_Y, INK, INK_FAINT, INK_SOFT } from './constants';
 import { WEAPONS, type WeaponDef } from './data';
 import { drawFigure, ease, lerpPose, pose, type Pose } from './figure';
 import { sfx } from './sfx';
@@ -23,7 +23,25 @@ export interface PlayerInput {
   swingLow: boolean;
   /** A or D held: guard with the sword. */
   block: boolean;
+  /** Up arrow held (the ghost flies up). */
+  up?: boolean;
 }
+
+/** Perks currently working on the player (set by the scene every frame). */
+export interface PlayerPerks {
+  sword: boolean;
+  long: boolean;
+  spear: boolean;
+  berserk: boolean;
+  invinc: boolean;
+  ghost: boolean;
+  invis: boolean;
+  freeze: boolean;
+}
+export const NO_PERKS: PlayerPerks = { sword: false, long: false, spear: false, berserk: false, invinc: false, ghost: false, invis: false, freeze: false };
+const LONG_MUL = 1.5;
+const GHOST_SCALE = 1 / 1.5;
+const BERSERK_TICK = 0.065;
 
 export type HitResult = 'blocked' | 'hit' | 'ignored';
 type AttackCtx = 'stand' | 'crouch' | 'air';
@@ -99,6 +117,7 @@ export interface PlayerHost {
   dustAt(x: number, y: number, n: number): void;
   /** Distance from x to the nearest hittable zombie's near edge in direction dir, or null. */
   nearestAhead(x: number, dir: number): number | null;
+  throwSpear(player: Player, kind: SwingKind, x: number, y: number): void;
 }
 
 export class Player {
@@ -124,7 +143,12 @@ export class Player {
     hit: Set<unknown>;
     swung: boolean;
     lunge: boolean;
+    /** A spear throw: just a pose, the spear does the hitting. */
+    throw?: boolean;
   } | null = null;
+  fx: PlayerPerks = { ...NO_PERKS };
+  private berserkT = 0;
+  private wasGhost = false;
   maxShield = 100;
   shield = 100;
   blocking = false;
@@ -174,14 +198,31 @@ export class Player {
     return this.god || this.time < this.invulnUntil || this.dead;
   }
 
+  /** Drawing / hurtbox scale: the ghost is smaller. */
+  get sizeMul() {
+    return this.fx.ghost ? GHOST_SCALE : 1;
+  }
+  /** Weapon reach multiplier (long sword). */
+  get reachMul() {
+    return this.fx.long ? LONG_MUL : 1;
+  }
+
   hurtbox(): Rect {
-    const h = this.crouching ? PLAYER_CROUCH_H : PLAYER_H;
-    return { left: this.x - PLAYER_W / 2, right: this.x + PLAYER_W / 2, top: this.footY - h, bottom: this.footY };
+    const h = (this.crouching ? PLAYER_CROUCH_H : PLAYER_H) * this.sizeMul;
+    const w = PLAYER_W * this.sizeMul;
+    return { left: this.x - w / 2, right: this.x + w / 2, top: this.footY - h, bottom: this.footY };
+  }
+
+  /** Berserk: the whirl hits all around the player. */
+  whirlBox(): Rect {
+    const r = this.weapon.range * FIG * this.reachMul * 1.05;
+    const f = this.footY;
+    return { left: this.x - r, right: this.x + r, top: f - 140 * FIG * this.sizeMul, bottom: f + 6 };
   }
 
   swingBox(kind: SwingKind, crouched: boolean, ctx: AttackCtx = crouched ? 'crouch' : 'stand'): Rect {
     const near = this.x - this.facing * 10;
-    const far = this.x + this.facing * this.weapon.range * FIG;
+    const far = this.x + this.facing * this.weapon.range * FIG * this.reachMul;
     const f = this.footY;
     let top: number, bottom: number;
     if (ctx === 'air') {
@@ -201,6 +242,20 @@ export class Player {
 
   damage(amount: number, fromDir: number): HitResult {
     if (this.invulnerable) return 'ignored';
+    if (this.fx.invinc) {
+      this.blockFlashUntil = this.time + 0.2;
+      this.body.setVelocityX(fromDir * 160);
+      sfx.block();
+      return 'ignored';
+    }
+    if (this.fx.berserk) {
+      // Berserk takes the hit but keeps whirling: no stagger, no knockback.
+      this.hp = Math.max(0, this.hp - amount);
+      this.invulnUntil = this.time + 0.5;
+      sfx.playerHurt();
+      if (this.hp <= 0) this.die(fromDir);
+      return 'hit';
+    }
     if (this.blocking) {
       const cost = amount * BLOCK_COST;
       this.lastBlockAt = this.time;
@@ -223,13 +278,16 @@ export class Player {
     this.blocking = false;
     this.body.setVelocity(fromDir * 260, -260);
     sfx.playerHurt();
-    if (this.hp <= 0) {
-      this.dead = true;
-      this.deadT = 0;
-      this.body.setVelocityX(fromDir * 200);
-      this.host.playerDied(this);
-    }
+    if (this.hp <= 0) this.die(fromDir);
     return 'hit';
+  }
+
+  private die(fromDir: number) {
+    this.dead = true;
+    this.deadT = 0;
+    this.body.setAllowGravity(true);
+    this.body.setVelocityX(fromDir * 200);
+    this.host.playerDied(this);
   }
 
   heal(amount: number) {
@@ -258,6 +316,14 @@ export class Player {
     }
     this.wasOnGround = onGround;
 
+    if (this.fx.ghost !== this.wasGhost && !this.dead) {
+      this.wasGhost = this.fx.ghost;
+      this.body.setAllowGravity(!this.fx.ghost);
+      if (this.fx.ghost) {
+        this.flipping = false;
+        this.cur = { ...this.cur, rot: 0 };
+      }
+    }
     if (this.dead) {
       this.deadT += dt;
       if (onGround) this.body.setVelocityX(this.body.velocity.x * 0.9);
@@ -268,8 +334,15 @@ export class Player {
 
     const hurt = this.time < this.hurtUntil;
     const locked = this.time < this.lockUntil;
-    this.crouching = input.down && onGround && !hurt;
-    this.blocking = input.block && onGround && !hurt && !this.attack && !this.flipping;
+    const ghost = this.fx.ghost;
+    this.crouching = input.down && onGround && !hurt && !ghost;
+    this.blocking = input.block && onGround && !hurt && !this.attack && !this.flipping && !this.fx.berserk;
+    if (ghost) {
+      // Fly: up / down arrows move vertically, no gravity.
+      const vy = (input.up || input.jumpPressed ? -1 : 0) + (input.down ? 1 : 0);
+      this.body.setVelocityY(Phaser.Math.Linear(this.body.velocity.y, vy * SPEED, Math.min(1, 12 * dt)));
+      if (this.body.top < 70 && this.body.velocity.y < 0) this.body.setVelocityY(0);
+    }
 
     // Horizontal movement.
     if (!hurt && !locked) {
@@ -293,7 +366,7 @@ export class Player {
     // Jumping (with a little buffer + coyote time so it feels fair).
     if (input.jumpPressed) this.jumpBufferedAt = this.time;
     const wantsJump = this.time - this.jumpBufferedAt < 0.12;
-    if (wantsJump && !hurt) {
+    if (wantsJump && !hurt && !ghost) {
       const touchingLeft = this.body.blocked.left || this.body.left <= ARENA_LEFT + 2;
       const touchingRight = this.body.blocked.right || this.body.right >= ARENA_RIGHT - 2;
       if (onGround || this.time - this.lastGroundAt < 0.09) {
@@ -326,21 +399,41 @@ export class Player {
       }
     }
 
+    // Berserk: a non-stop whirl that hits on both sides, five times faster than a swing.
+    if (this.fx.berserk) {
+      this.attack = null;
+      this.berserkT -= dt;
+      if (this.berserkT <= 0) {
+        this.berserkT = BERSERK_TICK;
+        this.host.playerSwing(this, Math.random() < 0.5 ? 'high' : 'low', this.whirlBox(), new Set());
+        if (Math.random() < 0.35) sfx.swing(this.weapon.id === 'axe');
+      }
+    }
+    // Spear: W / S throw a spear instead of swinging.
+    if (this.fx.spear && !this.fx.berserk && !this.attack && !hurt && !this.flipping && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
+      const kind: SwingKind = input.swingHigh ? 'high' : 'low';
+      const hb = this.hurtbox();
+      const y = kind === 'high' ? hb.top + (hb.bottom - hb.top) * 0.2 : hb.top + (hb.bottom - hb.top) * 0.62;
+      this.host.throwSpear(this, kind, this.x + this.facing * 20, y);
+      this.attack = { kind: 'low', ctx: 'stand', variant: 2, t: this.weapon.activeFrom, hit: new Set(), swung: true, lunge: false, throw: true };
+      this.nextAttackAt = this.time + 0.35;
+      input = { ...input, swingHigh: false, swingLow: false };
+    }
     // Attacks.
-    if (!this.attack && !hurt && !this.flipping && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
+    if (!this.attack && !hurt && !this.flipping && !this.fx.berserk && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
       const kind: SwingKind = input.swingHigh ? 'high' : 'low';
       const ctx: AttackCtx = !onGround ? 'air' : this.crouching ? 'crouch' : 'stand';
       let lunge = false;
       if (ctx === 'stand') {
         const d = this.host.nearestAhead(this.x, this.facing);
-        const reach = this.weapon.range * FIG;
+        const reach = this.weapon.range * FIG * this.reachMul;
         lunge = d !== null && d > reach - 12 && d < reach + 80;
       }
       this.attack = { kind, ctx, variant: Math.floor(Math.random() * 3), t: 0, hit: new Set(), swung: false, lunge };
       this.blocking = false;
       this.nextAttackAt = this.time + this.weapon.swingMs / 1000 + 0.04;
       this.trailPts = [];
-      if (ctx === 'air' && kind === 'low') this.body.setVelocityY(Math.max(this.body.velocity.y, 0) + 380);
+      if (ctx === 'air' && kind === 'low' && !ghost) this.body.setVelocityY(Math.max(this.body.velocity.y, 0) + 380);
     }
     if (this.attack) {
       const a = this.attack;
@@ -349,13 +442,21 @@ export class Player {
         a.swung = true;
         sfx.swing(this.weapon.id === 'axe');
       }
-      if (a.t >= this.weapon.activeFrom && a.t <= this.weapon.activeTo) {
+      if (!a.throw && a.t >= this.weapon.activeFrom && a.t <= this.weapon.activeTo) {
         this.host.playerSwing(this, a.kind, this.swingBox(a.kind, a.ctx === 'crouch', a.ctx), a.hit);
       }
       if (a.t >= 1) this.attack = null;
     }
 
     // Pose.
+    if (this.fx.berserk && !hurt) {
+      const spin = this.time * 26;
+      const legs = onGround && Math.abs(this.body.velocity.x) > 30 ? this.walkPose(dt) : P_IDLE;
+      this.cur = { ...legs, lean: 0.05 + Math.sin(this.time * 9) * 0.1, fUpper: 2.4 + Math.sin(spin) * 0.6, fFore: 2.6 + Math.sin(spin) * 0.6, bUpper: -1.6, bFore: -1.2, weapon: spin, rot: 0 };
+      // the whirl draws its smear with the normal trail
+      this.draw();
+      return;
+    }
     if (this.attack) {
       const a = this.attack;
       const [A, B] =
@@ -423,15 +524,58 @@ export class Player {
       ox = -h * Math.sin(r) * this.facing * FIG;
       oy = (-h + h * Math.cos(r)) * FIG;
     }
-    const pts = drawFigure(g, this.x + ox, this.footY + oy, this.facing, FIG, this.cur, {
+    const fx = this.fx;
+    const sc = FIG * this.sizeMul;
+    const fy = this.footY + oy + (fx.ghost ? Math.sin(this.time * 4) * 4 : 0);
+    this.trail.clear();
+    if (fx.ghost) {
+      // haze around the floating ghost
+      for (let i = 0; i < 5; i++) {
+        const a = this.time * 2 + i * 1.3;
+        this.trail.fillStyle(ACC.main, 0.12);
+        this.trail.fillCircle(this.x + Math.cos(a) * 16, fy - 50 * sc + Math.sin(a * 1.3) * 26, 26 * sc + i * 2);
+      }
+    }
+    const pts = drawFigure(g, this.x + ox, fy, this.facing, sc, this.cur, {
       kind: 'player',
       weapon: this.weapon.id,
       headgear: this.profile.headgear,
       time: this.time,
       vx: this.body.velocity.x,
-      alpha: blink ? 0.35 : 1,
-      weaponScale: 1 - this.guard,
+      alpha: blink ? 0.35 : fx.invis ? 0.45 : fx.ghost ? 0.75 : 1,
+      weaponScale: (1 - this.guard) * this.reachMul,
+      ink: fx.invis ? ACC.main : undefined,
+      fill: fx.invis ? ACC.soft : undefined,
     });
+    if (fx.long && this.guard < 0.5) {
+      // accent edge on the stretched blade
+      g.lineStyle(2.5, ACC.main, 0.9);
+      g.lineBetween(pts.hand.x + (pts.tip.x - pts.hand.x) * 0.3, pts.hand.y + (pts.tip.y - pts.hand.y) * 0.3, pts.tip.x, pts.tip.y);
+    }
+    if (fx.invinc) {
+      // the cocoon
+      const hb = this.hurtbox();
+      const cy = (hb.top + hb.bottom) / 2 - 6;
+      const pulse = 1 + Math.sin(this.time * 6) * 0.04 + (this.time < this.blockFlashUntil ? 0.08 : 0);
+      g.fillStyle(ACC.main, 0.13);
+      g.fillEllipse(this.x, cy, 110 * FIG * pulse, 175 * FIG * pulse);
+      g.lineStyle(5, ACC.main, 0.85);
+      g.strokeEllipse(this.x, cy, 110 * FIG * pulse, 175 * FIG * pulse);
+      g.lineStyle(2, INK, 0.7);
+      g.strokeEllipse(this.x, cy, 120 * FIG * pulse, 186 * FIG * pulse);
+    }
+    if (fx.berserk) {
+      const hb = this.hurtbox();
+      const cy = hb.top + (hb.bottom - hb.top) * 0.35;
+      const R = this.weapon.range * FIG * this.reachMul * 0.75;
+      for (let i = 0; i < 3; i++) {
+        const a0 = this.time * 20 + i * 2.1;
+        this.trail.lineStyle(6 - i, ACC.main, 0.55 - i * 0.12);
+        this.trail.beginPath();
+        this.trail.arc(this.x, cy, R - i * 10, a0, a0 + 1.8, false);
+        this.trail.strokePath();
+      }
+    }
     // The sword folds away and a curved shield unfolds up and down in front of the hands.
     if (this.guard > 0.04) {
       const k = ease.out(this.guard);
@@ -454,8 +598,7 @@ export class Player {
       for (const a of [-0.6, 0, 0.6]) g.fillCircle(cx + Math.cos(base + a * span) * R, cy + Math.sin(base + a * span) * R, 2.2 * FIG);
     }
     // Weapon swoosh.
-    this.trail.clear();
-    if (this.attack && this.attack.t > this.weapon.activeFrom * 0.8) {
+    if ((this.attack && !this.attack.throw && this.attack.t > this.weapon.activeFrom * 0.8) || fx.berserk) {
       this.trailPts.push({ x: pts.tip.x, y: pts.tip.y, hx: pts.hand.x, hy: pts.hand.y, t: this.time });
     }
     this.trailPts = this.trailPts.filter((p) => this.time - p.t < 0.14);
@@ -469,11 +612,11 @@ export class Player {
         const inner = 0.45;
         const ax = a.hx + (a.x - a.hx) * inner, ay = a.hy + (a.y - a.hy) * inner;
         const bx = b.hx + (b.x - b.hx) * inner, by = b.hy + (b.y - b.hy) * inner;
-        this.trail.fillStyle(INK_FAINT, 0.55 * k);
+        this.trail.fillStyle(fx.sword || fx.berserk ? ACC.main : INK_FAINT, (fx.sword ? 0.7 : 0.55) * k);
         this.trail.fillPoints([{ x: ax, y: ay }, { x: a.x, y: a.y }, { x: b.x, y: b.y }, { x: bx, y: by }] as unknown as Phaser.Math.Vector2[], true);
       }
       const last = this.trailPts[n - 1];
-      this.trail.lineStyle(3, INK_SOFT, 0.6);
+      this.trail.lineStyle(3, fx.sword ? ACC.dark : INK_SOFT, 0.6);
       this.trail.beginPath();
       this.trail.moveTo(this.trailPts[0].x, this.trailPts[0].y);
       for (const p of this.trailPts) this.trail.lineTo(p.x, p.y);

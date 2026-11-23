@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GROUND_Y, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
+import { GROUND_Y, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH, ACC } from './constants';
 import { sfx } from './sfx';
 
 export type AmbientMode = 'sky' | 'night' | 'torches' | 'none';
@@ -148,7 +148,7 @@ export class Ambient {
       g.fillStyle(INK, 1);
       g.fillTriangle(fx - 9, fy, fx + 9, fy, fx + sway, fy - h);
       g.fillEllipse(fx, fy - 4, 18, 14);
-      g.fillStyle(PAPER, 1);
+      g.fillStyle(ACC.main, 1);
       g.fillTriangle(fx - 4, fy - 2, fx + 4, fy - 2, fx + sway * 0.6, fy - h * 0.55);
       if (Math.random() < dt * 6) this.embers.push({ x: fx + (Math.random() - 0.5) * 8, y: fy - h, vy: -30 - Math.random() * 40, life: 1 });
     }

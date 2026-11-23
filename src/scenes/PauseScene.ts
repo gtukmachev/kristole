@@ -39,7 +39,7 @@ export class PauseScene extends Phaser.Scene {
     ]);
     texts.forEach((t, i) => t.on('pointerup', () => rows[i][0].activate()));
     new GridNav(this, rows, () => this.resume());
-    this.add.text(WIDTH / 2, HEIGHT - 60, '← →  move  ·  ↑ / Space  jump, again in air = flip  ·  ↓  duck  ·  W  swing up  ·  S  swing down  ·  A / D  block  ·  M  sound', {
+    this.add.text(WIDTH / 2, HEIGHT - 60, '← →  move  ·  ↑ / Space  jump, again in air = flip  ·  ↓  duck  ·  W  swing up  ·  S  swing down  ·  A / D  block  ·  1…0  perks  ·  M  sound', {
       fontFamily: FONT_SLAB, fontSize: '18px', color: hex(INK),
     }).setOrigin(0.5);
   }

@@ -323,6 +323,36 @@ class Sfx {
     [523, 659, 784].forEach((f, i) => this.tone(t + i * 0.07, 0.22, 'triangle', f, f, 0.2));
   }
 
+  /** A perk flies into its slot. */
+  perkPick() {
+    const t = this.now();
+    if (!t) return;
+    [659, 880, 1175].forEach((f, i) => this.tone(t + i * 0.06, 0.18, 'sine', f, f * 1.02, 0.18));
+  }
+
+  /** A perk switches on. `power` 0..1 makes it bigger. */
+  perkOn(power: number) {
+    const t = this.now();
+    if (!t) return;
+    this.noise(t, 0.4 + power * 0.5, 'bandpass', 300, 3000, 0.3 + power * 0.2, 1.2);
+    [330, 494, 659, 988].forEach((f, i) => this.tone(t + i * 0.05, 0.4 + power * 0.4, 'triangle', f, f * 1.01, 0.16));
+    if (power > 0.7) this.tone(t, 1.6, 'sine', 80, 40, 0.5, 0.05);
+  }
+
+  /** A spear flies off. */
+  spear() {
+    const t = this.now();
+    if (!t) return;
+    this.noise(t, 0.22, 'bandpass', 2500, 800, 0.35, 2);
+  }
+
+  /** Zombie crumbles to dust. */
+  crumble() {
+    const t = this.now();
+    if (!t) return;
+    this.noise(t, 0.6, 'lowpass', 1500, 200, 0.25);
+  }
+
   thunder() {
     const t = this.now();
     if (!t) return;

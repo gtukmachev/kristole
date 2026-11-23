@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA_LEFT, ARENA_RIGHT, GROUND_Y, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
+import { ACC, ARENA_LEFT, ARENA_RIGHT, GROUND_Y, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
 import type { PlaceDef } from './places';
 import { drawPlace } from './placeArt';
 
@@ -277,7 +277,7 @@ export function bake(scene: Phaser.Scene, key: string, draw: (g: G) => void, dep
 export function drawBackground(scene: Phaser.Scene, place: PlaceDef) {
   const bg = bake(scene, `bg-${place.id}`, (g) => drawPlace(g, place), 0);
   // Ground cover sits in front of the fighters so zombies can rise out of the earth.
-  const ground = bake(scene, 'ground', (g) => {
+  const ground = bake(scene, groundKey(), (g) => {
     const rand = rng(99);
     g.fillStyle(PAPER, 1);
     g.fillRect(0, GROUND_Y + 3, WIDTH, HEIGHT - GROUND_Y);
@@ -291,6 +291,12 @@ export function drawBackground(scene: Phaser.Scene, place: PlaceDef) {
       g.strokeCircle(x, y, 1.5 + rand() * 2.5);
     }
     penLine(g, 0, GROUND_Y + 1, WIDTH, GROUND_Y + 1, 4, INK, rand);
+    // thin accent line right under the ink ground line
+    g.lineStyle(2, ACC.main, 0.75);
+    g.lineBetween(0, GROUND_Y + 7, WIDTH, GROUND_Y + 7);
   }, 50);
   return { bg, ground };
 }
+
+/** The ground strip differs per chapter only by its accent line. */
+export const groundKey = () => `ground-${ACC.main.toString(16)}`;

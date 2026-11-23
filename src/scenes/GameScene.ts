@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import {
-  ARENA_LEFT, ARENA_RIGHT, BLOOD, FIG, BLOOD_DARK, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex,
+  ACC, ARENA_LEFT, ARENA_RIGHT, FIG, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex, rgbOf, setAccent,
 } from '../game/constants';
 import { CHAPTERS, buildLevel, type LevelDef, type ZombieSize } from '../game/data';
-import { PLACES, type PlaceDef, type PlaceId, type SpotKind } from '../game/places';
+import { CAMP_PERK_SPOTS, placeOf, type PlaceDef, type PlaceId, type SpotKind } from '../game/places';
+import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId } from '../game/perks';
+import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
+import { SECRETS, Secret } from '../game/secrets';
 import type { AmbientMode } from '../game/ambient';
-import { drawBackground } from '../game/background';
+import { drawBackground, groundKey } from '../game/background';
 import { Ambient } from '../game/ambient';
-import { Player, type PlayerHost, type PlayerInput, type Rect, type SwingKind } from '../game/Player';
+import { NO_PERKS, Player, type PlayerHost, type PlayerInput, type Rect, type SwingKind } from '../game/Player';
 import { Zombie, type ZombieHost } from '../game/Zombie';
 import { sfx } from '../game/sfx';
 import { storage, type WeaponId } from '../game/storage';
@@ -22,14 +25,30 @@ export interface GameSceneData {
   kills?: number;
   /** Place the player just left: shown sliding away during the transition. */
   fromPlace?: string;
+  /** Perks in the 10 slots (a game session keeps them from chapter to chapter until you die). */
+  perks?: number[];
+  /** Seconds left of perks that were working when the player walked into the next place. */
+  perksLeft?: number[];
 }
 
-type Phase = 'enter' | 'intro' | 'wave' | 'between' | 'cleared' | 'exit' | 'over';
+/** 'choose': level 0 of a chapter, pick one free perk. */
+type Phase = 'enter' | 'intro' | 'choose' | 'wave' | 'between' | 'cleared' | 'exit' | 'over';
+
+interface PerkPickup {
+  img: Phaser.GameObjects.Image;
+  id: PerkId;
+  dropped: boolean;
+  /** One of the three free perks of level 0. */
+  choice: boolean;
+  baseY: number;
+  born: number;
+}
 
 const AMBIENT: Record<PlaceId, AmbientMode> = {
   cliffFoot: 'sky', caveDoor: 'sky', caveInside: 'none', cliffPath: 'sky', summit: 'sky',
   graveGates: 'night', crypts: 'night', chapel: 'night', openGraves: 'night', mausoleum: 'night',
   moat: 'sky', courtyard: 'torches', armory: 'none', ramparts: 'sky', throne: 'none',
+  trailhead: 'sky', graveLane: 'night', castleRoad: 'sky',
 };
 
 /** Size of the dark opening a zombie steps out of. */
@@ -86,6 +105,20 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private place!: PlaceDef;
   private fromPlace?: string;
   private hearts: Phaser.GameObjects.Image[] = [];
+  // ---- perks
+  private perkCounts: number[] = [];
+  private perksAtStart: number[] = [];
+  private perksLeftAtStart: number[] = [];
+  /** Seconds left for each active perk (0 = off). */
+  private perkLeft: number[] = [];
+  private perkBar!: PerkBar;
+  private pickups: PerkPickup[] = [];
+  private secrets: Secret[] = [];
+  private spears: Spear[] = [];
+  private angel?: Angel;
+  private dawn?: DawnFx;
+  private ash!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private digitKeys: Phaser.Input.Keyboard.Key[] = [];
 
   constructor() {
     super('Game');
@@ -93,7 +126,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   init(data: GameSceneData) {
     this.chapter = data.chapter ?? 0;
-    this.levelIdx = data.level ?? 0;
+    this.levelIdx = data.level ?? -1; // -1 = level 0 of the chapter (pick a perk)
     this.weaponId = data.weapon ?? 'sword';
     this.score = data.score ?? 0;
     this.startHp = data.hp ?? 100;
@@ -113,11 +146,25 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.phase = 'intro';
     this.phaseT = 0;
     this.pending = 0;
+    this.perkCounts = data.perks ? [...data.perks] : PERKS.map(() => 0);
+    this.perksAtStart = [...this.perkCounts];
+    this.perkLeft = data.perksLeft ? [...data.perksLeft] : PERKS.map(() => 0);
+    this.perksLeftAtStart = [...this.perkLeft];
+    this.pickups = [];
+    this.secrets = [];
+    this.spears = [];
+    this.angel = undefined;
+    this.dawn = undefined;
+  }
+
+  private get isCamp() {
+    return this.levelIdx < 0;
   }
 
   create() {
-    this.place = PLACES[this.chapter][this.levelIdx];
-    this.level = buildLevel(this.chapter, this.levelIdx);
+    setAccent(this.chapter);
+    this.place = placeOf(this.chapter, this.levelIdx);
+    this.level = this.isCamp ? { waves: [], strength: 1 } : buildLevel(this.chapter, this.levelIdx);
     this.physics.world.setBounds(ARENA_LEFT, -400, ARENA_RIGHT - ARENA_LEFT, GROUND_Y + 400);
     this.physics.world.gravity.y = 2000;
     this.physics.world.timeScale = 1;
@@ -135,7 +182,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       b.checkCollision.down = false;
       b.checkCollision.left = false;
       b.checkCollision.right = false;
-      this.physics.add.collider(this.player.zone, zone);
+      // the ghost flies through ledges
+      this.physics.add.collider(this.player.zone, zone, undefined, () => !this.player.fx.ghost);
     }
     this.player.hp = this.startHp;
     this.player.god = params.has('god');
@@ -147,6 +195,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       up: 'UP', down: 'DOWN', left: 'LEFT', right: 'RIGHT',
       space: 'SPACE', esc: 'ESC', m: 'M',
     }) as Record<string, Phaser.Input.Keyboard.Key>;
+    this.digitKeys = PERKS.map((p) => kb.addKey(p.key === '0' ? 'ZERO' : ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'][Number(p.key) - 1]));
     kb.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
 
     const bloodCfg = (angle: { min: number; max: number }): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig => ({
@@ -155,7 +204,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       gravityY: 1100,
       lifespan: { min: 500, max: 1000 },
       scale: { start: 1.1, end: 0.4 },
-      tint: [BLOOD, BLOOD_DARK],
+      tint: [ACC.main, ACC.dark],
       emitting: false,
     });
     this.bloodR = this.add.particles(0, 0, 'dot', bloodCfg({ min: -70, max: 15 })).setDepth(30);
@@ -171,8 +220,25 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       alpha: { start: 0.8, end: 0 },
       emitting: false,
     }).setDepth(55);
+    // Dawn: zombies crumble into ash that the wind carries away
+    this.ash = this.add.particles(0, 0, 'dot', {
+      speed: { min: 30, max: 140 },
+      angle: { min: -110, max: -20 },
+      gravityY: -60,
+      lifespan: { min: 700, max: 1600 },
+      scale: { start: 1.2, end: 0.3 },
+      tint: [INK_SOFT, ACC.main, 0x888888],
+      alpha: { start: 0.9, end: 0 },
+      emitting: false,
+    }).setDepth(56);
 
     this.createHud();
+    for (const d of SECRETS[this.place.id] ?? []) {
+      this.secrets.push(new Secret(this, d, (x, y) => {
+        this.dustAt(x, y, 8);
+        this.spawnPerk(randomPerk(), x, y, true);
+      }));
+    }
 
     // Lose focus (switch tab / window) -> pause, so you don't die while away.
     const onBlur = () => this.openPause();
@@ -185,7 +251,11 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     });
 
     sfx.playMusic('game');
-    this.spawnHeart(this.place.heart.x, this.place.heart.y, false);
+    if (this.place.heart) this.spawnHeart(this.place.heart.x, this.place.heart.y, false);
+    if (this.isCamp) {
+      // level 0: three free perks, take one
+      freeChoice().forEach((id, i) => this.spawnPerk(id, CAMP_PERK_SPOTS[i].x, CAMP_PERK_SPOTS[i].y, false, true));
+    }
     if (this.fromPlace && this.textures.exists(`bg-${this.fromPlace}`)) this.slideIn(this.fromPlace);
     else this.startIntro();
     (window as unknown as { __scene?: GameScene }).__scene = this;
@@ -200,7 +270,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     txt(24, 14, name, 22);
     const wIcon = this.add.graphics().setDepth(100).setScrollFactor(0);
     drawWeapon(wIcon, this.weaponId, { x: 286, y: 66 }, { x: 0.8, y: -0.6 }, 0.75);
-    const level = txt(WIDTH / 2, 14, `${ch.title}  ·  LEVEL ${this.levelIdx + 1}/${ch.levels}  ·  ${this.place.name.toUpperCase()}`, 22).setOrigin(0.5, 0);
+    const levelName = this.isCamp ? `${ch.title}  ·  ${this.place.name.toUpperCase()}` : `${ch.title}  ·  LEVEL ${this.levelIdx + 1}/${ch.levels}  ·  ${this.place.name.toUpperCase()}`;
+    const level = txt(WIDTH / 2, 14, levelName, 22).setOrigin(0.5, 0);
+    this.perkBar = new PerkBar(this);
     const wave = txt(WIDTH / 2, 42, '', 20).setOrigin(0.5, 0).setColor(hex(INK_SOFT));
     const score = txt(WIDTH - 24, 12, '', 34).setOrigin(1, 0);
     const combo = txt(WIDTH - 24, 52, '', 24).setOrigin(1, 0);
@@ -210,7 +282,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const mute = txt(WIDTH - 24, HEIGHT - 34, 'SOUND OFF (M)', 18).setOrigin(1, 0).setVisible(sfx.muted);
     this.hud = { hp, score, combo, level, wave, banner, sub, hint, mute };
     if (this.chapter === 0 && this.levelIdx === 0) {
-      hint.setText('← →  move    ↑ / Space  jump (again in air = flip)    ↓  duck    W  swing up    S  swing down    A / D  block    Esc  pause');
+      hint.setText('← →  move    ↑ / Space  jump (again in air = flip)    ↓  duck    W  swing up    S  swing down    A / D  block    1…0  perks    Esc  pause');
       hint.setAlpha(1);
       this.tweens.add({ targets: hint, alpha: 0, delay: 14000, duration: 1500 });
     }
@@ -229,6 +301,12 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private startIntro() {
     this.phase = 'intro';
     this.phaseT = 0;
+    if (this.isCamp) {
+      const ch = CHAPTERS[this.chapter];
+      this.phase = 'choose';
+      this.banner(ch.title, `${ch.name}  ·  pick ONE perk`, 2200);
+      return;
+    }
     this.banner(`LEVEL ${this.levelIdx + 1}`, this.place.name, 1500);
   }
 
@@ -274,6 +352,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       return;
     }
 
+    for (let i = 0; i < this.digitKeys.length; i++) if (JD(this.digitKeys[i])) this.activatePerk(i);
+    this.updatePerks(realDt);
+
     const input: PlayerInput = {
       // Arrows (+ Space) move, WASD fights: W / S swing, A / D guard.
       left: k.left.isDown,
@@ -283,6 +364,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       swingHigh: JD(k.w),
       swingLow: JD(k.s),
       block: k.a.isDown || k.d.isDown,
+      up: k.up.isDown || k.space.isDown,
     };
     if (this.phase === 'over' || this.phase === 'enter') {
       input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
@@ -300,8 +382,19 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         return ahead > 0 && ahead < (z.hurtbox().right - z.hurtbox().left) * 0.5 + 14 && o.state !== 'dying';
       });
     }
-    for (const z of [...this.zombies]) z.update(dt, this.player);
+    const invis = this.player.fx.invis;
+    for (const z of [...this.zombies]) {
+      z.ignorePlayer = invis;
+      z.update(dt, this.player);
+    }
     this.separatePlayer();
+    this.updateSpears(dt);
+    this.updateAngel(dt);
+    for (const sc of this.secrets) {
+      sc.update(dt);
+      if (!this.player.dead) sc.playerNear(this.player.x, this.player.footY);
+    }
+    this.updatePickups();
 
     this.ambient.update(dt);
     this.updateWaves(dt);
@@ -329,7 +422,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private separatePlayer() {
     const p = this.player;
-    if (p.dead || p.flipping) return; // a flip passes through zombies
+    if (p.dead || p.flipping || p.fx.ghost) return; // a flip (and the ghost) passes through zombies
     const pr = p.hurtbox();
     for (const z of this.zombies) {
       if (!z.alive || z.state === 'rising' || z.state === 'falling') continue;
@@ -386,7 +479,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         break;
       case 'cleared':
         if (this.phaseT > 2.6) {
-          if (this.levelIdx < CHAPTERS[this.chapter].levels - 1) this.openExit();
+          // v4: chapters run back to back – only the very last level ends the game
+          const lastOfGame = this.levelIdx === CHAPTERS[this.chapter].levels - 1 && this.chapter === CHAPTERS.length - 1;
+          if (!lastOfGame) this.openExit();
           else this.goNext();
         }
         break;
@@ -494,7 +589,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   // ---- hearts (health pick-ups) ------------------------------------------
 
   private spawnHeart(x: number, y: number, dropped: boolean) {
-    const h = this.add.image(x, y, 'heart').setDepth(18);
+    const h = this.add.image(x, y, 'heart').setDepth(18).setTint(ACC.main);
     h.setData('born', this.time.now).setData('dropped', dropped).setData('baseY', y);
     if (dropped) {
       this.physics.add.existing(h);
@@ -528,6 +623,163 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.hearts = this.hearts.filter((h) => h.active);
   }
 
+  // ---- perks ----------------------------------------------------------------
+
+  private activatePerk(i: number) {
+    if (this.player.dead || this.phase === 'over' || this.perkCounts[i] <= 0 || this.perkLeft[i] > 0) {
+      if (this.perkCounts[i] <= 0 && !this.player.dead) sfx.denied();
+      return;
+    }
+    const def = PERKS[i];
+    this.perkCounts[i]--;
+    this.perkLeft[i] = def.durationMs / 1000;
+    sfx.perkOn(i / 9);
+    activationFx(this, def.id, this.player);
+    if (def.id === 'dawn') this.dawn = new DawnFx(this);
+    this.tip('perkOn', `${def.name}: ${def.blurb.toLowerCase()} for ${Math.round(def.durationMs / 1000)} seconds!`);
+  }
+
+  /** Ticks active perks (real time, so slow motion doesn't stretch them) and applies their effects. */
+  private updatePerks(dt: number) {
+    const on = (id: PerkId) => this.perkLeft[PERK_INDEX[id]] > 0;
+    for (let i = 0; i < this.perkLeft.length; i++) if (this.perkLeft[i] > 0) this.perkLeft[i] = Math.max(0, this.perkLeft[i] - dt);
+    const fx = this.player.fx;
+    const wasGhost = fx.ghost;
+    Object.assign(fx, NO_PERKS, {
+      sword: on('sword'), long: on('long'), spear: on('spear'), berserk: on('berserk'),
+      invinc: on('invinc'), ghost: on('ghost'), invis: on('invis'), freeze: on('freeze'),
+    });
+    if (wasGhost && !fx.ghost) this.player.body.setAllowGravity(true);
+    // angel: comes while the perk works, flies away after
+    if (on('angel') && !this.angel) this.angel = new Angel(this, this.player.x);
+    if (!on('angel') && this.angel) this.angel.leave();
+    // dawn: every zombie crumbles, new ones too
+    if (this.dawn) {
+      const left = this.perkLeft[PERK_INDEX.dawn] / (PERKS[PERK_INDEX.dawn].durationMs / 1000);
+      this.dawn.update(dt, left);
+      if (this.dawn.lit && on('dawn')) {
+        for (const z of this.zombies) {
+          if (!z.alive || (z.state === 'rising' && !z.hittable)) continue;
+          z.crumble();
+          this.onKill(z, 'low', z.size === 'big' || z.size === 'giant');
+        }
+      }
+      if (!on('dawn') && left <= 0) {
+        this.dawn.destroy();
+        this.dawn = undefined;
+      }
+    }
+  }
+
+  private spawnPerk(id: PerkId, x: number, y: number, dropped: boolean, choice = false) {
+    const img = this.add.image(x, y, perkTexture(this, id)).setDepth(18);
+    if (dropped) {
+      this.physics.add.existing(img);
+      const b = img.body as Phaser.Physics.Arcade.Body;
+      b.setCollideWorldBounds(true);
+      b.setBounce(0.45, 0.35);
+      b.setVelocity(Phaser.Math.Between(-110, 110), -420);
+      b.setDrag(90, 0);
+      b.setCircle(22, 8, 8);
+    } else if (choice) {
+      // a little glow so the three free perks stand out
+      const glow = this.add.circle(x, y, 40, ACC.main, 0.18).setDepth(17);
+      this.tweens.add({ targets: glow, scale: 1.25, alpha: 0.05, duration: 800, yoyo: true, repeat: -1 });
+      img.setData('glow', glow);
+    }
+    this.pickups.push({ img, id, dropped, choice, baseY: y, born: this.time.now });
+  }
+
+  private pickupBox(pk: PerkPickup): Rect {
+    return { left: pk.img.x - 24, right: pk.img.x + 24, top: pk.img.y - 24, bottom: pk.img.y + 24 };
+  }
+
+  private collectPerk(pk: PerkPickup) {
+    if (!pk.img.active || pk.img.getData('taken')) return;
+    pk.img.setData('taken', true);
+    const i = PERK_INDEX[pk.id];
+    (pk.img.getData('glow') as Phaser.GameObjects.Arc | undefined)?.destroy();
+    if (pk.img.body) this.physics.world.disableBody(pk.img.body as Phaser.Physics.Arcade.Body);
+    // flies up into its slot
+    const slot = this.perkBar.slotPos(i);
+    const target = { x: slot.x + this.cameras.main.scrollX, y: slot.y + this.cameras.main.scrollY };
+    pk.img.setDepth(103);
+    sfx.perkPick();
+    this.popText(pk.img.x, pk.img.y - 30, PERKS[i].name);
+    this.tweens.add({
+      targets: pk.img, x: target.x, y: target.y, scale: 0.65, duration: 650, ease: 'Cubic.In',
+      onComplete: () => {
+        pk.img.destroy();
+        this.perkCounts[i] = Math.min(PERK_MAX_STACK, this.perkCounts[i] + 1);
+        this.perkBar.pop(i);
+      },
+    });
+    this.tip('perk', `You got a perk! Press ${PERKS[i].key} to use it.\nIt works for a few seconds.`);
+    if (pk.choice) {
+      // the other two free perks vanish, then the way on opens
+      for (const o of this.pickups) {
+        if (o === pk || !o.choice || o.img.getData('taken')) continue;
+        o.img.setData('taken', true);
+        (o.img.getData('glow') as Phaser.GameObjects.Arc | undefined)?.destroy();
+        this.dustAt(o.img.x, o.img.y, 10);
+        this.tweens.add({ targets: o.img, scale: 0, alpha: 0, angle: 180, duration: 400, onComplete: () => o.img.destroy() });
+      }
+      if (this.phase === 'choose') {
+        this.phase = 'cleared';
+        this.phaseT = 0;
+        this.time.delayedCall(900, () => {
+          if (this.phase === 'cleared') this.openExit();
+        });
+      }
+    }
+  }
+
+  private updatePickups() {
+    const p = this.player;
+    const hb = p.hurtbox();
+    for (const pk of this.pickups) {
+      if (!pk.img.active || pk.img.getData('taken')) continue;
+      const age = (this.time.now - pk.born) / 1000;
+      if (!pk.dropped) pk.img.y = pk.baseY + Math.sin(age * 3 + pk.img.x) * 6;
+      pk.img.setAngle(Math.sin(age * 2.5) * 8);
+      if (!p.dead && pk.img.x > hb.left - 26 && pk.img.x < hb.right + 26 && pk.img.y > hb.top - 26 && pk.img.y < hb.bottom + 14 && age > 0.35) this.collectPerk(pk);
+    }
+    this.pickups = this.pickups.filter((pk) => pk.img.active);
+  }
+
+  throwSpear(player: Player, kind: SwingKind, x: number, y: number) {
+    this.spears.push(new Spear(this, x, y, player.facing, kind));
+    sfx.spear();
+  }
+
+  private updateSpears(dt: number) {
+    for (const sp of this.spears) {
+      sp.update(dt);
+      const box = sp.box();
+      for (const sc of this.secrets) if (!sp.hit.has(sc) && sc.hit(box)) sp.hit.add(sc);
+      for (const z of this.zombies) {
+        if (!z.hittable || sp.hit.has(z) || !overlap(box, z.hurtbox())) continue;
+        sp.hit.add(z); // pierces: keeps flying through
+        const dmg = Math.round(45 * (this.player.fx.sword ? 1.6 : 1));
+        this.hitZombie(z, dmg, sp.kind, sp.dir, 220, box.top, false, true);
+      }
+      if (sp.dead) sp.destroy();
+    }
+    this.spears = this.spears.filter((sp) => !sp.dead);
+  }
+
+  private updateAngel(dt: number) {
+    const a = this.angel;
+    if (!a) return;
+    a.update(dt, this.zombies, this.player, (z) => {
+      this.hitZombie(z, 30, 'high', z.x >= a.x ? 1 : -1, 140, 0, false, false);
+    });
+    if (a.done) {
+      a.destroy();
+      this.angel = undefined;
+    }
+  }
+
   // ---- moving on to the next place -----------------------------------------
 
   private openExit() {
@@ -540,7 +792,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     g.lineStyle(5, INK, 1);
     g.strokeRoundedRect(-55, -175, 110, 175, { tl: 55, tr: 55, bl: 0, br: 0 });
     g.setScale(0.1, 1);
-    const arrow = this.add.text(-150, -120, 'GO  →', { fontFamily: FONT_IMPACT, fontSize: '54px', color: hex(INK) }).setOrigin(0.5);
+    const arrow = this.add.text(-150, -120, 'GO  →', { fontFamily: FONT_IMPACT, fontSize: '54px', color: hex(ACC.main), stroke: hex(INK), strokeThickness: 3 }).setOrigin(0.5);
     this.add.container(x, GROUND_Y, [g, arrow]).setDepth(12);
     this.tweens.add({ targets: g, scaleX: 1, duration: 500, ease: 'Cubic.Out' });
     this.tweens.add({ targets: arrow, x: -120, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
@@ -553,7 +805,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.phase = 'enter';
     this.phaseT = 0;
     this.add.image(-WIDTH, 0, `bg-${from}`).setOrigin(0).setDepth(0);
-    this.add.image(-WIDTH, 0, 'ground').setOrigin(0).setDepth(50);
+    this.add.image(-WIDTH, 0, groundKey()).setOrigin(0).setDepth(50);
     const cam = this.cameras.main;
     cam.setScroll(-WIDTH, 0);
     this.tweens.add({ targets: cam, scrollX: 0, duration: 1100, ease: 'Sine.InOut', onComplete: () => this.startIntro() });
@@ -585,7 +837,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
     this.tipText?.destroy();
     const t = this.add
-      .text(WIDTH / 2, 110, text, {
+      .text(WIDTH / 2, 170, text, {
         fontFamily: FONT_HAND, fontSize: '28px', color: hex(INK), backgroundColor: '#ffffff',
         padding: { x: 16, y: 8 }, align: 'center',
       })
@@ -609,18 +861,22 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private goNext() {
     const ch = CHAPTERS[this.chapter];
+    const carry = {
+      weapon: this.weaponId,
+      score: this.score,
+      hp: Math.min(100, this.player.hp + (this.isCamp ? 0 : 35)),
+      kills: this.kills,
+      fromPlace: this.place.id,
+      perks: this.perkCounts,
+      perksLeft: this.perkLeft,
+    };
     if (this.levelIdx < ch.levels - 1) {
-      this.scene.restart({
-        chapter: this.chapter,
-        level: this.levelIdx + 1,
-        weapon: this.weaponId,
-        score: this.score,
-        hp: Math.min(100, this.player.hp + 35),
-        kills: this.kills,
-        fromPlace: this.place.id,
-      } satisfies GameSceneData);
-    } else {
+      this.scene.restart({ chapter: this.chapter, level: this.levelIdx + 1, ...carry } satisfies GameSceneData);
+    } else if (this.chapter < CHAPTERS.length - 1) {
+      // straight on into the next chapter: its level 0 first
       storage.unlockChapter(this.chapter + 1);
+      this.scene.restart({ chapter: this.chapter + 1, level: -1, ...carry } satisfies GameSceneData);
+    } else {
       this.finish(true);
     }
   }
@@ -630,7 +886,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       win,
       score: this.score,
       chapter: this.chapter,
-      level: this.levelIdx,
+      level: Math.max(0, this.levelIdx),
       weapon: this.weaponId,
       kills: this.kills,
     });
@@ -640,24 +896,39 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   playerSwing(player: Player, kind: SwingKind, box: Rect, hitOnce: Set<unknown>) {
     const w = player.weapon;
+    const fx = player.fx;
+    for (const sc of this.secrets) if (!hitOnce.has(sc) && sc.hit(box)) hitOnce.add(sc);
+    for (const pk of this.pickups) if (overlap(box, this.pickupBox(pk))) this.collectPerk(pk);
+    // perk multipliers
+    const mul = (fx.sword ? 1.6 : 1) * (fx.long ? 1.3 : 1) * (fx.ghost ? 2 : 1) * (fx.berserk ? 0.7 : 1);
+    const knock = fx.long ? 2 : 1;
     for (const z of this.zombies) {
       if (!z.hittable || hitOnce.has(z)) continue;
       if (!overlap(box, z.hurtbox())) continue;
       hitOnce.add(z);
-      const dmg = Math.round(w.damage * (kind === 'high' ? 1.3 : 1));
-      const killed = z.takeHit(dmg, kind, player.facing, w.knockback * (kind === 'high' ? 1.25 : 1));
-      const hb = z.hurtbox();
-      const hy = kind === 'high' ? hb.top + (hb.bottom - hb.top) * 0.25 : hb.top + (hb.bottom - hb.top) * 0.6;
-      const hx = player.facing > 0 ? hb.left + 4 : hb.right - 4;
-      const big = z.size === 'big' || z.size === 'giant';
-      this.spill(hx, Math.max(hy, box.top), player.facing, killed ? 34 : 14);
-      this.impact(hx, Math.max(hy, box.top), killed || w.id === 'axe' ? 1.3 : 1);
-      if (killed && (big || Math.random() < 0.25)) this.lensBlood(big ? 4 : 1);
-      sfx.hit(w.id === 'axe');
+      const dir = fx.berserk ? Math.sign(z.x - player.x) || player.facing : player.facing;
+      const dmg = Math.round(w.damage * (kind === 'high' ? 1.3 : 1) * mul);
+      this.hitZombie(z, dmg, kind, dir, w.knockback * (kind === 'high' ? 1.25 : 1) * knock, box.top, !fx.berserk, w.id === 'axe');
+    }
+  }
+
+  /** Shared by swings, spears and the angel. `heavyFx` = full hit-stop and shake (not for rapid hits). */
+  private hitZombie(z: Zombie, dmg: number, kind: SwingKind, dir: number, knockback: number, minY: number, heavyFx: boolean, heavySound: boolean) {
+    const killed = z.takeHit(dmg, kind, dir, knockback);
+    if (this.player.fx.freeze && !killed) z.freeze(1.5);
+    const hb = z.hurtbox();
+    const hy = kind === 'high' ? hb.top + (hb.bottom - hb.top) * 0.25 : hb.top + (hb.bottom - hb.top) * 0.6;
+    const hx = dir > 0 ? hb.left + 4 : hb.right - 4;
+    const big = z.size === 'big' || z.size === 'giant';
+    this.spill(hx, Math.max(hy, minY), dir, killed ? 34 : heavyFx ? 14 : 7);
+    this.impact(hx, Math.max(hy, minY), killed || heavySound ? 1.3 : 1);
+    if (killed && (big || Math.random() < 0.25)) this.lensBlood(big ? 4 : 1);
+    sfx.hit(heavySound);
+    if (heavyFx) {
       this.cameras.main.shake(killed ? 140 : 70, killed ? 0.006 : 0.003);
       this.freeze(killed ? 0.07 : 0.035);
-      if (killed) this.onKill(z, kind, big);
-    }
+    } else if (killed) this.cameras.main.shake(90, 0.004);
+    if (killed) this.onKill(z, kind, big);
   }
 
   private onKill(z: Zombie, kind: SwingKind, big: boolean) {
@@ -676,6 +947,15 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.popText(px, py, mult > 1 ? `+${pts}  x${mult}` : `+${pts}`);
     const dropChance = { small: 0.08, medium: 0.12, big: 0.35, giant: 1 }[z.size];
     if (Math.random() < dropChance) this.spawnHeart(z.x, z.footY - z.height * 0.6, true);
+    // perks: never from small ones, rarely from medium, more often from big, three from the giant
+    const perkCount = z.size === 'giant' ? 3 : Math.random() < { small: 0, medium: 0.05, big: 0.2, giant: 0 }[z.size] ? 1 : 0;
+    for (let i = 0; i < perkCount; i++) this.spawnPerk(randomPerk(), z.x + (i - 1) * 30, z.footY - z.height * 0.7, true);
+    if (z.ash) {
+      sfx.crumble();
+      const hb = z.hurtbox();
+      for (let i = 0; i < 4; i++) this.ash.explode(14, z.x + Phaser.Math.Between(-12, 12), hb.top + (hb.bottom - hb.top) * (i / 4));
+      return;
+    }
     // A high swing knocks the head clean off (except the giant's – too thick).
     if (kind === 'high' && z.size !== 'giant' && pts0) {
       z.knockOffHead();
@@ -698,7 +978,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const hb = this.player.hurtbox();
       this.spill(this.player.x, hb.top + 30, z.facing, 18);
       this.cameras.main.shake(160, 0.007);
-      this.cameras.main.flash(90, 196, 0, 12, false);
+      const [r, g, b] = rgbOf(ACC.main);
+      this.cameras.main.flash(90, r, g, b, false);
       this.lensBlood(2);
       this.combo = 0;
       this.comboTimer = 0;
@@ -751,7 +1032,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const d = this.add
         .image(px, py, 'drop')
         .setDepth(120)
-        .setTint(Math.random() < 0.6 ? BLOOD : BLOOD_DARK)
+        .setTint(Math.random() < 0.6 ? ACC.main : ACC.dark)
         .setScale(Phaser.Math.FloatBetween(0.7, 1.6))
         .setAngle(Phaser.Math.Between(-15, 15))
         .setAlpha(0.9)
@@ -781,7 +1062,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const img = this.add
       .image(Phaser.Math.Clamp(x, ARENA_LEFT, ARENA_RIGHT), GROUND_Y + Phaser.Math.Between(1, 6), 'splat')
       .setDepth(56)
-      .setTint(Math.random() < 0.5 ? BLOOD : BLOOD_DARK)
+      .setTint(Math.random() < 0.5 ? ACC.main : ACC.dark)
       .setScale(s * Phaser.Math.FloatBetween(0.5, 1.3), s * Phaser.Math.FloatBetween(0.6, 1))
       .setAlpha(0.95);
     this.splats.push(img);
@@ -840,6 +1121,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     if (this.zombies.some((z) => z.size === 'big' && z.state === 'walk')) this.tip('flip', 'Too big to jump over? Jump, then press ↑ again while holding ← or →\nto FLIP right through it!');
     if (this.zombies.some((z) => z.size === 'giant' && z.state === 'walk')) this.tip('giant', 'A GIANT! Duck its swing and keep hitting.\nSwing UP (W) does more damage.');
     if (this.levelIdx === 0 && this.phase === 'between' && this.waveIdx === 0) this.tip('wall', 'Tip: jump into a wall, then press ↑ again to bounce off it!');
+    if (this.levelIdx === 0 && this.phase === 'wave' && this.phaseT > 9) this.tip('secret', 'Psst… things that wobble may hide a PERK.\nHit them, put out candles, scare the birds!');
   }
 
   private updateCombo(dt: number) {
@@ -858,7 +1140,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     hp.fillRect(x, y, w, h);
     // pulse when low on health
     const low = frac < 0.3 && !this.player.dead;
-    hp.fillStyle(low && Math.floor(this.time.now / 250) % 2 ? BLOOD : INK, 1);
+    hp.fillStyle(low && Math.floor(this.time.now / 250) % 2 ? ACC.main : INK, 1);
     hp.fillRect(x, y, w * frac, h);
     // hatch the empty part so it reads clearly in B&W
     hp.lineStyle(1, INK, 0.35);
@@ -875,8 +1157,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     hp.fillRect(x, sy, w * sf, sh);
     hp.lineStyle(1, INK, 0.3);
     for (let i = x + w * sf; i < x + w; i += 5) hp.lineBetween(i, sy + sh, Math.min(i + 5, x + w), sy);
-    hp.lineStyle(2, broke && Math.floor(this.time.now / 120) % 2 ? BLOOD : INK, 1);
+    hp.lineStyle(2, broke && Math.floor(this.time.now / 120) % 2 ? ACC.main : INK, 1);
     hp.strokeRect(x, sy, w, sh);
+    this.perkBar.draw(this.perkCounts, this.perkLeft.map((l, i) => (l > 0 ? l / (PERKS[i].durationMs / 1000) : 0)), this.time.now / 1000);
     score.setText(String(this.score).padStart(6, '0'));
     combo.setText(this.combo > 1 && this.comboTimer > 0 ? `COMBO x${Math.min(this.combo, 5)}` : '');
     const total = this.level.waves.length;
@@ -906,7 +1189,10 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   /** Data to restart the current level (used by the pause menu). */
   restartData(): GameSceneData {
-    return { chapter: this.chapter, level: this.levelIdx, weapon: this.weaponId, score: this.levelStartScore, hp: this.startHp, kills: this.levelStartKills };
+    return {
+      chapter: this.chapter, level: this.levelIdx, weapon: this.weaponId, score: this.levelStartScore, hp: this.startHp, kills: this.levelStartKills,
+      perks: this.perksAtStart, perksLeft: this.perksLeftAtStart,
+    };
   }
 
   /** Test hook: state snapshot. */
@@ -919,10 +1205,16 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       chapter: this.chapter,
       hp: this.player.hp,
       score: this.score,
-      zombies: this.zombies.map((z) => ({ size: z.size, state: z.state, x: Math.round(z.x), hp: z.hp })),
+      zombies: this.zombies.map((z) => ({ size: z.size, state: z.state, x: Math.round(z.x), hp: z.hp, frozen: z.frozen, ash: z.ash })),
+      spears: this.spears.length,
+      angel: !!this.angel,
       kills: this.kills,
       queue: this.spawnQueue.length,
       player: { x: Math.round(this.player.x), y: Math.round(this.player.footY), crouch: this.player.crouching, facing: this.player.facing > 0 },
+      perks: [...this.perkCounts],
+      perksOn: PERKS.filter((_p, i) => this.perkLeft[i] > 0).map((p) => p.id),
+      pickups: this.pickups.map((p) => ({ id: p.id, x: Math.round(p.img.x), y: Math.round(p.img.y), choice: p.choice })),
+      secrets: this.secrets.map((sc) => ({ kind: sc.def.kind, x: sc.def.x, y: sc.def.y, x2: sc.def.x2, done: sc.done })),
     };
   }
 }

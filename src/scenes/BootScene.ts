@@ -61,24 +61,23 @@ export class BootScene extends Phaser.Scene {
       }
       return pts as unknown as Phaser.Math.Vector2[];
     };
-    g.fillStyle(0xc4000c, 1);
+    // white fill, tinted with the chapter's accent colour in the game
+    g.fillStyle(0xffffff, 1);
     g.fillPoints(heart(1.15), true);
     g.lineStyle(3, 0x111111, 1);
     g.strokePoints(heart(1.15), true);
-    g.lineStyle(3, 0xffffff, 0.8);
-    g.lineBetween(12, 12, 16, 9);
     g.generateTexture('heart', 44, 42);
     g.destroy();
     void GROUND_Y;
 
     // URL shortcuts for testing: ?scene=game&chapter=0&level=2&weapon=axe
     const p = new URLSearchParams(window.location.search);
-    // Test shortcut: /<chapter>/<level> (1-based), e.g. /2/3 = chapter 2, level 3.
+    // Test shortcut: /<chapter>/<level> (1-based), e.g. /2/3 = chapter 2, level 3; /2/0 = its level 0 (perk pick).
     const path = window.location.pathname.slice(import.meta.env.BASE_URL.length - 1);
     const deep = /^\/(\d+)\/(\d+)\/?$/.exec(path);
     if (deep) {
       const ch = Phaser.Math.Clamp(Number(deep[1]) - 1, 0, CHAPTERS.length - 1);
-      const lv = Phaser.Math.Clamp(Number(deep[2]) - 1, 0, CHAPTERS[ch].levels - 1);
+      const lv = Phaser.Math.Clamp(Number(deep[2]) - 1, -1, CHAPTERS[ch].levels - 1);
       let w: 'sword' | 'axe' = 'sword';
       try {
         if (window.localStorage.getItem('kristole.weapon') === 'axe') w = 'axe';
@@ -92,7 +91,9 @@ export class BootScene extends Phaser.Scene {
     const chapter = Number(p.get('chapter') ?? 0);
     const level = Number(p.get('level') ?? 0);
     const weapon = p.get('weapon') === 'axe' ? 'axe' : 'sword';
-    if (target === 'game') this.scene.start('Game', { chapter, level, weapon, fromPlace: p.get('from') ?? undefined });
+    // &perks=1111111111 – perk counts per slot (1..0), for testing
+    const perks = p.get('perks')?.padEnd(10, '0').slice(0, 10).split('').map(Number);
+    if (target === 'game') this.scene.start('Game', { chapter, level, weapon, fromPlace: p.get('from') ?? undefined, perks });
     else if (target === 'weapon') this.scene.start('Weapon', { chapter });
     else if (target === 'avatar') this.scene.start('Avatar');
     else if (target === 'leaderboard') this.scene.start('Leaderboard');

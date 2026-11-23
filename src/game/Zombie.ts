@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FIG, GROUND_Y } from './constants';
+import { ACC, FIG, GROUND_Y, INK_SOFT } from './constants';
 import { ZOMBIES, type ZombieDef, type ZombieSize } from './data';
 import { drawFigure, ease, lerpPose, pose, BONES, type FigurePoints, type Pose, type ZombieVariant } from './figure';
 import type { Player, Rect, SwingKind } from './Player';
@@ -56,6 +56,16 @@ export class Zombie {
   private poiseUntil = 0;
   private lungeUntil = 0;
   private lungeCooldown = 1 + Math.random() * 2;
+  /** Freeze perk: stuck to the ground until this time. */
+  private frozenUntil = 0;
+  /** Invisibility perk: the zombie doesn't see the player and just wanders about. */
+  ignorePlayer = false;
+  private wanderDir = Math.random() < 0.5 ? -1 : 1;
+  private wanderT = 0;
+  /** Hit while the player is invisible: strike back once in that direction. */
+  private retaliateDir = 0;
+  /** Dawn perk: crumbles to dust instead of falling dead. */
+  ash = false;
 
   constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number, readonly variant: ZombieVariant = 'plain', readonly spawn: SpawnMode = 'rise', startY = GROUND_Y) {
     this.def = ZOMBIES[size];
@@ -102,11 +112,34 @@ export class Zombie {
     return { left: this.x - w / 2, right: this.x + w / 2, top: this.footY - this.height, bottom: this.footY };
   }
 
+  get frozen() {
+    return this.time < this.frozenUntil && this.alive;
+  }
+
+  freeze(sec: number) {
+    if (!this.alive || this.state === 'rising' || this.state === 'falling') return;
+    this.frozenUntil = this.time + sec;
+    if (this.state === 'windup' || this.state === 'strike') this.setState('recover');
+  }
+
+  /** Dawn: turn to dust right away. */
+  crumble() {
+    if (!this.alive) return;
+    this.hp = 0;
+    this.ash = true;
+    this.killedBy = 'low';
+    this.chuteDrop = 0;
+    this.setState('dying');
+    this.body.setAllowGravity(false);
+    this.body.setVelocity(0, 0);
+  }
+
   /** Returns true if this hit killed it. */
   takeHit(dmg: number, kind: SwingKind, dirX: number, knockback: number): boolean {
     if (!this.alive) return false;
     this.hp -= dmg;
     this.flashUntil = this.time + 0.12;
+    if (this.ignorePlayer) this.retaliateDir = -dirX;
     if (this.hp <= 0) {
       this.killedBy = kind;
       this.setState('dying');
@@ -146,6 +179,13 @@ export class Zombie {
     const dist = Math.abs(dx);
     const lowAttack = this.size === 'small';
 
+    if (this.frozen) {
+      // Stuck to the ground: no moving, no attacking, pose held.
+      this.body.setVelocityX(0);
+      this.draw();
+      return;
+    }
+
     switch (this.state) {
       case 'falling': {
         this.body.setVelocityX(0);
@@ -168,6 +208,26 @@ export class Zombie {
         break;
       }
       case 'walk': {
+        if (this.retaliateDir) {
+          // hit by something it can't see: swing back that way
+          this.facing = this.retaliateDir;
+          this.retaliateDir = 0;
+          this.body.setVelocityX(0);
+          this.setState('windup');
+          sfx.zombieAttack();
+          break;
+        }
+        if (this.ignorePlayer) {
+          this.wanderT -= dt;
+          const nearWall = (this.wanderDir < 0 && this.body.blocked.left) || (this.wanderDir > 0 && this.body.blocked.right);
+          if (this.wanderT <= 0 || nearWall) {
+            this.wanderDir = nearWall ? -this.wanderDir : Math.random() < 0.5 ? -1 : 1;
+            this.wanderT = 1.2 + Math.random() * 2.5;
+          }
+          this.facing = this.wanderDir;
+          this.body.setVelocityX(this.wanderDir * this.speed * 0.45 * (this.blocked ? 0.3 : 1));
+          break;
+        }
         if (!player.dead) this.facing = dx >= 0 ? 1 : -1;
         if (!player.dead && dist <= d.reach * FIG + PLAYER_HALF && Math.abs(player.footY - this.footY) < 140 * FIG) {
           this.body.setVelocityX(0);
@@ -225,7 +285,7 @@ export class Zombie {
       }
       case 'dying': {
         if (this.body.blocked.down) this.body.setVelocityX(this.body.velocity.x * 0.85);
-        if (this.stateT > 2.6) {
+        if (this.stateT > (this.ash ? 1.1 : 2.6)) {
           this.host.zombieGone(this);
           return;
         }
@@ -299,6 +359,10 @@ export class Zombie {
     }
     if (this.spawn === 'parachute') this.drawChute(g);
     if (this.state === 'dying' && this.stateT > 1.9) alpha = Math.max(0, 1 - (this.stateT - 1.9) / 0.7);
+    if (this.ash) {
+      alpha = Math.max(0, 1 - this.stateT / 1.0);
+      sink = this.stateT * this.stateT * 40;
+    }
     this.lastPoints = drawFigure(g, this.x, this.footY + sink, this.facing, this.scale, this.cur, {
       kind: 'zombie',
       seed: this.seed,
@@ -306,7 +370,25 @@ export class Zombie {
       flash: this.time < this.flashUntil,
       headless: this.headless,
       variant: this.variant,
+      ink: this.ash ? (this.stateT < 0.25 ? ACC.main : INK_SOFT) : undefined,
     });
+    if (this.frozen) {
+      // stuck to the ground: jagged crust around the feet, faint coloured film over the body
+      const w = 30 * this.scale, f = this.footY;
+      const left = Math.max(0, (this.frozenUntil - this.time) / 1.5);
+      g.fillStyle(ACC.main, 0.12 * Math.min(1, left * 3));
+      g.fillRoundedRect(this.x - w * 0.9, f - this.height * 1.02, w * 1.8, this.height * 1.02, 10);
+      g.fillStyle(ACC.soft, 1);
+      g.lineStyle(2.5, ACC.main, 1);
+      const pts: { x: number; y: number }[] = [];
+      for (let i = 0; i <= 8; i++) {
+        const x = this.x - w + (2 * w * i) / 8;
+        pts.push({ x, y: f - (i % 2 ? 26 : 10) * this.scale * 0.8 });
+      }
+      pts.push({ x: this.x + w, y: f }, { x: this.x - w, y: f });
+      g.fillPoints(pts as unknown as Phaser.Math.Vector2[], true);
+      g.strokePoints(pts as unknown as Phaser.Math.Vector2[], true);
+    }
     if (this.state === 'windup' && this.stateT > 0.08) {
       // Teach the player what to do: arrow above the head (↓ = duck, ↑ = jump).
       const hx = this.lastPoints.head.x;
