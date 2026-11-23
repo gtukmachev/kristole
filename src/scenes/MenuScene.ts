@@ -140,8 +140,9 @@ export class MenuScene extends Phaser.Scene {
       onClick: () => this.scene.start('Leaderboard'),
     });
     const soon = () => this.showToast('Coming soon!');
-    const events = makeButton(this, { x: WIDTH / 2 - bw / 2 - gap / 2, y: row2y, w: bw, h: bh, label: 'Events', color: MENU_DARKRED, enabled: false, onClick: soon, onDisabled: soon });
-    const rewards = makeButton(this, { x: WIDTH / 2 + bw / 2 + gap / 2, y: row2y, w: bw, h: bh, label: 'Rewards', color: MENU_DARKRED, enabled: false, onClick: soon, onDisabled: soon });
+    const events = makeButton(this, { x: x0, y: row2y, w: bw, h: bh, label: 'Events', color: MENU_DARKRED, enabled: false, onClick: soon, onDisabled: soon });
+    const perks = makeButton(this, { x: WIDTH / 2, y: row2y, w: bw, h: bh, label: 'Perks', onClick: () => this.scene.start('Perks', { from: 'menu' }) });
+    const rewards = makeButton(this, { x: WIDTH / 2 + bw + gap, y: row2y, w: bw, h: bh, label: 'Rewards', color: MENU_DARKRED, enabled: false, onClick: soon, onDisabled: soon });
 
     // Chapter selector.
     const cy = 540;
@@ -175,7 +176,7 @@ export class MenuScene extends Phaser.Scene {
       left: () => this.changeChapter(-1),
       right: () => this.changeChapter(1),
     };
-    new GridNav(this, [[buttonItem(play), buttonItem(avatar), buttonItem(board)], [buttonItem(events), buttonItem(rewards)], [chapterItem]]);
+    new GridNav(this, [[buttonItem(play), buttonItem(avatar), buttonItem(board)], [buttonItem(events), buttonItem(perks), buttonItem(rewards)], [chapterItem]]);
     this.input.keyboard!.on('keydown-M', () => sfx.toggleMute());
   }
 

@@ -15,6 +15,8 @@ export interface PerkDef {
   key: string;
   durationMs: number;
   blurb: string;
+  /** Longer description for the perks screen. */
+  info: string;
   /** Weight when a perk drops from a zombie or a secret (weaker ones are more common). */
   weight: number;
 }
@@ -23,16 +25,16 @@ export const PERK_DEFAULT_DURATION = 10_000;
 export const PERK_MAX_STACK = 9;
 
 export const PERKS: PerkDef[] = [
-  { id: 'sword', name: 'SHARP BLADE', key: '1', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Your weapon hits harder' },
-  { id: 'freeze', name: 'FREEZE', key: '2', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Zombies you hit freeze' },
-  { id: 'long', name: 'LONG SWORD', key: '3', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Longer weapon, bigger knockback' },
-  { id: 'spear', name: 'SPEAR', key: '4', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'W / S throw spears that pierce' },
-  { id: 'invis', name: 'INVISIBLE', key: '5', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Zombies can\'t see you' },
-  { id: 'berserk', name: 'BERSERK', key: '6', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Wild whirl, 5x faster hits' },
-  { id: 'invinc', name: 'COCOON', key: '7', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Nothing can hurt you' },
-  { id: 'ghost', name: 'GHOST', key: '8', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Fly through walls and zombies' },
-  { id: 'angel', name: 'ANGEL', key: '9', durationMs: 12_000, weight: 2, blurb: 'An angel fights for you' },
-  { id: 'dawn', name: 'DAWN', key: '0', durationMs: 8_000, weight: 1, blurb: 'All zombies turn to dust' },
+  { id: 'sword', name: 'SHARP BLADE', key: '1', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Your weapon hits harder', info: "Your weapon hits 1.6× harder. The swing leaves a coloured trail." },
+  { id: 'freeze', name: 'FREEZE', key: '2', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Zombies you hit freeze', info: "Every zombie you hit freezes to the ground for 1.5 s and can't attack." },
+  { id: 'long', name: 'LONG SWORD', key: '3', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Longer weapon, bigger knockback', info: "Weapon 1.5× longer: reaches further, hits harder, throws zombies far back." },
+  { id: 'spear', name: 'SPEAR', key: '4', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'W / S throw spears that pierce', info: "W / S throw spears instead of swinging. A spear flies through every zombie in a row." },
+  { id: 'invis', name: 'INVISIBLE', key: '5', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Zombies can\'t see you', info: "Zombies stop looking for you and wander. One you hit swings back the way the hit came." },
+  { id: 'berserk', name: 'BERSERK', key: '6', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Wild whirl, 5x faster hits', info: "You whirl your weapon both ways, 5× faster. Hits still hurt, but nothing stops the whirl." },
+  { id: 'invinc', name: 'COCOON', key: '7', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Nothing can hurt you', info: "An unbreakable cocoon around you: nothing can hurt you." },
+  { id: 'ghost', name: 'GHOST', key: '8', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Fly through walls and zombies', info: "Smaller and flying (↑ / ↓) through ledges and zombies. Your hits do double damage." },
+  { id: 'angel', name: 'ANGEL', key: '9', durationMs: 12_000, weight: 2, blurb: 'An angel fights for you', info: "An angel flies down and strikes the zombies nearest to you." },
+  { id: 'dawn', name: 'DAWN', key: '0', durationMs: 8_000, weight: 1, blurb: 'All zombies turn to dust', info: "The sun rises: every zombie turns to dust, and new ones too." },
 ];
 
 export const PERK_INDEX: Record<PerkId, number> = Object.fromEntries(PERKS.map((p, i) => [p.id, i])) as Record<PerkId, number>;

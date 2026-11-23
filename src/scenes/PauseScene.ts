@@ -12,12 +12,12 @@ export class PauseScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.fillStyle(PAPER, 0.82);
     g.fillRect(0, 0, WIDTH, HEIGHT);
-    this.add.text(WIDTH / 2, 190, 'PAUSED', { fontFamily: FONT_IMPACT, fontSize: '96px', color: hex(INK) }).setOrigin(0.5);
-    const items = ['Resume', 'Restart level', 'Main menu'];
-    const actions = [() => this.resume(), () => this.restart(), () => this.toMenu()];
+    this.add.text(WIDTH / 2, 170, 'PAUSED', { fontFamily: FONT_IMPACT, fontSize: '96px', color: hex(INK) }).setOrigin(0.5);
+    const items = ['Resume', 'Restart level', 'Perks', 'Main menu'];
+    const actions = [() => this.resume(), () => this.restart(), () => this.perks(), () => this.toMenu()];
     const texts = items.map((s, i) =>
       this.add
-        .text(WIDTH / 2, 320 + i * 72, s, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '42px', color: hex(INK) })
+        .text(WIDTH / 2, 290 + i * 72, s, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '42px', color: hex(INK) })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true }),
     );
@@ -53,6 +53,11 @@ export class PauseScene extends Phaser.Scene {
     const game = this.scene.get('Game') as Phaser.Scene & { restartData?: () => object };
     this.scene.stop();
     game.scene.restart(game.restartData?.());
+  }
+
+  private perks() {
+    this.scene.stop();
+    this.scene.launch('Perks', { from: 'pause' });
   }
 
   private toMenu() {
