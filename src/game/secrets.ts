@@ -141,15 +141,15 @@ export class Secret {
       this.wobbleAt = 3 + Math.random() * 3;
     }
     this.wobble = Math.max(0, this.wobble - dt * 1.8);
-    this.draw();
+    this.draw(dt);
   }
 
-  private draw() {
+  private draw(dt: number) {
     const g = this.g;
     g.clear();
     const { kind } = this.def;
     const wob = Math.sin(this.t * 28) * 0.12 * this.wobble;
-    if (kind === 'birds') return this.drawBirds(g);
+    if (kind === 'birds') return this.drawBirds(g, dt);
     for (const p of this.parts) {
       if (kind === 'candles') {
         this.drawCandle(g, p, wob);
@@ -216,8 +216,7 @@ export class Secret {
     g.fillEllipse(p.x, p.y - 73, 4, 6);
   }
 
-  private drawBirds(g: Phaser.GameObjects.Graphics) {
-    const dt = this.scene.game.loop.delta / 1000;
+  private drawBirds(g: Phaser.GameObjects.Graphics, dt: number) {
     let visible = false;
     for (const b of this.birds) {
       if (this.flying) {

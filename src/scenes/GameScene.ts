@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import {
-  ACC, ARENA_LEFT, ARENA_RIGHT, FIG, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex, rgbOf, setAccent,
+  ACC, ACCENTS, ARENA_LEFT, ARENA_RIGHT, FIG, FONT_HAND, FONT_IMPACT, GROUND_Y, HEIGHT, INK, INK_SOFT, WIDTH, hex, rgbOf, setAccent,
 } from '../game/constants';
 import { CHAPTERS, buildLevel, type LevelDef, type ZombieSize } from '../game/data';
-import { CAMP_PERK_SPOTS, placeOf, type PlaceDef, type PlaceId, type SpotKind } from '../game/places';
+import { CAMP_PERK_SPOTS, chapterOfPlace, placeOf, type PlaceDef, type PlaceId, type SpotKind } from '../game/places';
 import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId } from '../game/perks';
 import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
 import { SECRETS, Secret } from '../game/secrets';
@@ -281,7 +281,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const hint = txt(WIDTH / 2, HEIGHT - 42, '', 20, FONT_HAND).setOrigin(0.5).setAlpha(0);
     const mute = txt(WIDTH - 24, HEIGHT - 34, 'SOUND OFF (M)', 18).setOrigin(1, 0).setVisible(sfx.muted);
     this.hud = { hp, score, combo, level, wave, banner, sub, hint, mute };
-    if (this.chapter === 0 && this.levelIdx === 0) {
+    if (this.chapter === 0 && this.levelIdx <= 0) {
       hint.setText('← →  move    ↑ / Space  jump (again in air = flip)    ↓  duck    W  swing up    S  swing down    A / D  block    1…0  perks    Esc  pause');
       hint.setAlpha(1);
       this.tweens.add({ targets: hint, alpha: 0, delay: 14000, duration: 1500 });
@@ -635,7 +635,6 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.perkLeft[i] = def.durationMs / 1000;
     sfx.perkOn(i / 9);
     activationFx(this, def.id, this.player);
-    if (def.id === 'dawn') this.dawn = new DawnFx(this);
     this.tip('perkOn', `${def.name}: ${def.blurb.toLowerCase()} for ${Math.round(def.durationMs / 1000)} seconds!`);
   }
 
@@ -652,8 +651,10 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     if (wasGhost && !fx.ghost) this.player.body.setAllowGravity(true);
     // angel: comes while the perk works, flies away after
     if (on('angel') && !this.angel) this.angel = new Angel(this, this.player.x);
+    if (on('angel') && this.angel) this.angel.stay();
     if (!on('angel') && this.angel) this.angel.leave();
-    // dawn: every zombie crumbles, new ones too
+    // dawn: every zombie crumbles, new ones too (and it keeps working in the next place)
+    if (on('dawn') && !this.dawn) this.dawn = new DawnFx(this);
     if (this.dawn) {
       const left = this.perkLeft[PERK_INDEX.dawn] / (PERKS[PERK_INDEX.dawn].durationMs / 1000);
       this.dawn.update(dt, left);
@@ -696,6 +697,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private collectPerk(pk: PerkPickup) {
     if (!pk.img.active || pk.img.getData('taken')) return;
+    if (this.perkCounts[PERK_INDEX[pk.id]] >= PERK_MAX_STACK) return; // slot full: leave it lying there
     pk.img.setData('taken', true);
     const i = PERK_INDEX[pk.id];
     (pk.img.getData('glow') as Phaser.GameObjects.Arc | undefined)?.destroy();
@@ -704,13 +706,14 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const slot = this.perkBar.slotPos(i);
     const target = { x: slot.x + this.cameras.main.scrollX, y: slot.y + this.cameras.main.scrollY };
     pk.img.setDepth(103);
+    // counted right away (so it isn't lost if the level changes mid-flight), the slot pops on arrival
+    this.perkCounts[i] = Math.min(PERK_MAX_STACK, this.perkCounts[i] + 1);
     sfx.perkPick();
     this.popText(pk.img.x, pk.img.y - 30, PERKS[i].name);
     this.tweens.add({
       targets: pk.img, x: target.x, y: target.y, scale: 0.65, duration: 650, ease: 'Cubic.In',
       onComplete: () => {
         pk.img.destroy();
-        this.perkCounts[i] = Math.min(PERK_MAX_STACK, this.perkCounts[i] + 1);
         this.perkBar.pop(i);
       },
     });
@@ -805,7 +808,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.phase = 'enter';
     this.phaseT = 0;
     this.add.image(-WIDTH, 0, `bg-${from}`).setOrigin(0).setDepth(0);
-    this.add.image(-WIDTH, 0, groundKey()).setOrigin(0).setDepth(50);
+    // the place being left keeps its own chapter's ground line (baked when it was shown)
+    const oldGround = `ground-${ACCENTS[chapterOfPlace(from as PlaceId)].main.toString(16)}`;
+    this.add.image(-WIDTH, 0, this.textures.exists(oldGround) ? oldGround : groundKey()).setOrigin(0).setDepth(50);
     const cam = this.cameras.main;
     cam.setScroll(-WIDTH, 0);
     this.tweens.add({ targets: cam, scrollX: 0, duration: 1100, ease: 'Sine.InOut', onComplete: () => this.startIntro() });

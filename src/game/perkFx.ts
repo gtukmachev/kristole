@@ -259,6 +259,11 @@ export class Angel {
     this.leaving = true;
   }
 
+  /** Called back while flying away (the perk was switched on again). */
+  stay() {
+    this.leaving = false;
+  }
+
   /** `hit` is called for every strike; returns nothing. */
   update(dt: number, zombies: Zombie[], player: Player, hit: (z: Zombie) => void) {
     this.t += dt;
