@@ -7,6 +7,7 @@ import { CAMP_PERK_SPOTS, chapterOfPlace, placeOf, type PlaceDef, type PlaceId, 
 import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId } from '../game/perks';
 import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
 import { SECRETS, Secret } from '../game/secrets';
+import { keyLog } from '../keyDebug';
 import type { AmbientMode } from '../game/ambient';
 import { drawBackground, groundKey } from '../game/background';
 import { Ambient } from '../game/ambient';
@@ -203,6 +204,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code ?? '') ?? /^(\d)$/.exec(e.key ?? '');
       if (!m) return;
       const slot = PERKS.findIndex((p) => p.key === m[1]);
+      keyLog(`  game: perk key ${m[1]} -> slot ${slot + 1}`);
       if (slot >= 0) this.perkPresses.push(slot);
     };
     kb.on('keydown', onKey);
@@ -638,8 +640,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   // ---- perks ----------------------------------------------------------------
 
   private activatePerk(i: number) {
+    keyLog(`  game: slot ${PERKS[i].key} (${PERKS[i].name}) count=${this.perkCounts[i]} active=${this.perkLeft[i] > 0} phase=${this.phase}`);
     if (this.player.dead || this.phase === 'over' || this.perkCounts[i] <= 0 || this.perkLeft[i] > 0) {
-      if (this.perkCounts[i] <= 0 && !this.player.dead) {
+      if (this.perkCounts[i] <= 0 && this.perkLeft[i] <= 0 && !this.player.dead) {
         // empty slot: say which keys do have a perk
         sfx.denied();
         this.perkBar.deny(i);

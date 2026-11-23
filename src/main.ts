@@ -8,6 +8,9 @@ import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { GameScene } from './scenes/GameScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
+import { installKeyDebug } from './keyDebug';
+
+installKeyDebug();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
