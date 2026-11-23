@@ -22,6 +22,13 @@ export const ACCENTS = [
   { main: 0xc4000c, dark: 0x7a0006, soft: 0xf1c9c9 },
   { main: 0x7b2cbf, dark: 0x45127a, soft: 0xdcc8ef },
   { main: 0x2e9e3e, dark: 0x16602a, soft: 0xc9e8cd },
+  { main: 0xe0661b, dark: 0x8f3a08, soft: 0xf6d2bb }, // stadium: orange
+  { main: 0x7a8a1c, dark: 0x485210, soft: 0xdfe5bf }, // army base: olive
+  { main: 0x9b5a1f, dark: 0x5c3310, soft: 0xead6c2 }, // village: brown
+  { main: 0x0e8f8f, dark: 0x065656, soft: 0xbfe5e5 }, // pirate ship: sea teal
+  { main: 0xd12f86, dark: 0x7d1650, soft: 0xf4c9e0 }, // mall: pink
+  { main: 0xd99a00, dark: 0x8a6200, soft: 0xf5e3b3 }, // burger: mustard
+  { main: 0x2456c9, dark: 0x13307a, soft: 0xc6d4f2 }, // airport: blue
 ];
 /** Current accent (mutable: set when a chapter starts). */
 export const ACC = { ...ACCENTS[0] };

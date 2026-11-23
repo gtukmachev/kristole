@@ -67,8 +67,11 @@ Menus also work with the mouse.
 - Block (A / D): a blocked hit only pushes you back, but costs shield. On level 1 the shield holds two medium hits, the third breaks through.
 - If a zombie is a little out of reach, a standing swing lunges forward.
 - Points for every zombie, combo multiplier for quick kills, bonus for each level.
-- 3 chapters × 5 places: The Cliff (foot, cave entrance, inside the cave, cliff path, summit), The Graveyard
-  (gates, crypts, chapel, open graves, mausoleum), The Castle (drawbridge, courtyard, armory, ramparts, throne room). Reaching a chapter unlocks it in the menu.
+- 10 chapters × 5 places (+ a level 0 with a free perk at the start of each):
+  The Cliff, The Graveyard, The Castle (v1–v3), and since v5: The Stadium (football, basketball players who jump,
+  badminton players who serve shuttlecocks at you), The Army Base (paratroopers drop out of a helicopter), The Village
+  (beards and rubber boots, animals in the background), The Pirate Ship (bandanas and eye patches), The Mall (cashiers),
+  Braaains Burger (cooks in aprons, a made-up burger brand) and The Airport (pilots). Reaching a chapter unlocks it in the menu.
 - Leaderboard, avatar name and progress are stored in the browser (localStorage).
 - Chapter one shows short beginner tips (once). Zombies dress differently per chapter.
 

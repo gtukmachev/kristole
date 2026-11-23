@@ -1,6 +1,7 @@
 import { ACCENTS, ARENA_LEFT, ARENA_RIGHT, GROUND_Y, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH } from './constants';
 import { P, castle, cliff, deadTree, graveyard, hatch, paper, penLine, rng, type G } from './background';
-import { chapterOfPlace, type PlaceDef, type Platform } from './places';
+import { CAMPS, PLACES, chapterOfPlace, type PlaceDef, type Platform } from './places';
+import { paintV5 } from './placeArt5';
 
 /** Accent of the place being painted (each chapter has its own colour). */
 let ACCENT = ACCENTS[0].main;
@@ -11,7 +12,7 @@ const DARK = 0x5a5a5a;
 
 // ---------------------------------------------------------------- shared props
 
-function sideWalls(g: G, style: 'rock' | 'stone' | 'none') {
+export function sideWalls(g: G, style: 'rock' | 'stone' | 'none') {
   if (style === 'none') return;
   for (const [x0, x1] of [[0, ARENA_LEFT], [ARENA_RIGHT, WIDTH]]) {
     const pts = [{ x: x0, y: 0 }, { x: x1, y: 0 }, { x: x1, y: GY }, { x: x0, y: GY }];
@@ -25,7 +26,7 @@ function sideWalls(g: G, style: 'rock' | 'stone' | 'none') {
   }
 }
 
-function ledge(g: G, p: Platform, style: 'rock' | 'stone' | 'wood') {
+export function ledge(g: G, p: Platform, style: 'rock' | 'stone' | 'wood') {
   const l = p.x - p.w / 2, r = p.x + p.w / 2;
   if (style === 'wood') {
     g.fillStyle(0xd8cfc0, 1);
@@ -50,7 +51,7 @@ function ledge(g: G, p: Platform, style: 'rock' | 'stone' | 'wood') {
   g.strokePoints(P(pts), true);
 }
 
-function caveArch(g: G, x: number, w = 120, h = 170) {
+export function caveArch(g: G, x: number, w = 120, h = 170) {
   const pts: { x: number; y: number }[] = [{ x: x - w / 2, y: GY }];
   for (let i = 0; i <= 10; i++) {
     const a = Math.PI + (Math.PI * i) / 10;
@@ -63,7 +64,7 @@ function caveArch(g: G, x: number, w = 120, h = 170) {
   g.strokePoints(P(pts.slice(0, -1)), false);
 }
 
-function woodDoor(g: G, x: number, w: number, h: number) {
+export function woodDoor(g: G, x: number, w: number, h: number) {
   g.fillStyle(0xd6cdbd, 1);
   g.fillRoundedRect(x - w / 2, GY - h, w, h, { tl: w / 2, tr: w / 2, bl: 0, br: 0 });
   g.lineStyle(4, INK, 1);
@@ -107,7 +108,7 @@ function coffinHole(g: G, x: number) {
   g.lineBetween(x - 30, GY - 78, x - 6, GY - 78);
 }
 
-function barrel(g: G, x: number) {
+export function barrel(g: G, x: number) {
   const w = 70, h = 92;
   g.fillStyle(0xd8cfc0, 1);
   g.fillEllipse(x, GY - h / 2, w, h);
@@ -121,7 +122,7 @@ function barrel(g: G, x: number) {
   for (let px = x - 18; px <= x + 18; px += 12) g.lineBetween(px, GY - h + 16, px, GY - 4);
 }
 
-function cabinet(g: G, x: number) {
+export function cabinet(g: G, x: number) {
   const w = 110, h = 200;
   g.fillStyle(0xd6cdbd, 1);
   g.fillRect(x - w / 2, GY - h, w, h);
@@ -187,7 +188,7 @@ function gothicWindow(g: G, x: number, y: number, w = 64, h = 130) {
   g.lineBetween(x - w / 2 - 8, y + h / 2, x + w / 2 + 8, y + h / 2);
 }
 
-function stoneWall(g: G, top: number, bottom: number, brickH = 26, alpha = 0.3) {
+export function stoneWall(g: G, top: number, bottom: number, brickH = 26, alpha = 0.3) {
   g.fillStyle(0xe6e5df, 1);
   g.fillRect(0, top, WIDTH, bottom - top);
   for (let y = top; y < bottom; y += brickH) {
@@ -198,7 +199,7 @@ function stoneWall(g: G, top: number, bottom: number, brickH = 26, alpha = 0.3) 
   }
 }
 
-function moon(g: G, x: number, y: number) {
+export function moon(g: G, x: number, y: number) {
   g.fillStyle(0xffffff, 1);
   g.fillCircle(x, y, 46);
   g.lineStyle(2.5, INK_SOFT, 0.8);
@@ -212,7 +213,7 @@ function moon(g: G, x: number, y: number) {
   g.strokePath();
 }
 
-function hills(g: G, rand: () => number, y0: number, amp: number, color = INK_FAINT) {
+export function hills(g: G, rand: () => number, y0: number, amp: number, color = INK_FAINT) {
   const pts: { x: number; y: number }[] = [];
   for (let x = 0; x <= WIDTH; x += 60) pts.push({ x, y: y0 + Math.sin(x * 0.007) * amp + rand() * amp * 0.4 });
   g.lineStyle(2, color, 1);
@@ -239,7 +240,7 @@ function camp(g: G, p: PlaceDef, scenery: (g: G) => void, style: 'rock' | 'stone
   g.lineBetween(1140, GY - 102, 1128, GY - 92);
 }
 
-const painters: Record<PlaceDef['id'], (g: G, p: PlaceDef) => void> = {
+const painters: Record<string, (g: G, p: PlaceDef) => void> = {
   trailhead: (g, p) => camp(g, p, cliff, 'rock'),
   graveLane: (g, p) => camp(g, p, graveyard, 'stone'),
   castleRoad: (g, p) => camp(g, p, castle, 'stone'),
@@ -537,8 +538,10 @@ const painters: Record<PlaceDef['id'], (g: G, p: PlaceDef) => void> = {
 };
 
 export function drawPlace(g: G, place: PlaceDef) {
-  ACCENT = ACCENTS[chapterOfPlace(place.id)].main;
-  painters[place.id](g, place);
+  const chapter = chapterOfPlace(place.id);
+  ACCENT = ACCENTS[chapter].main;
+  if (painters[place.id]) painters[place.id](g, place);
+  else paintV5(g, place, chapter, CAMPS[chapter]?.id === place.id ? -1 : PLACES[chapter].findIndex((q) => q.id === place.id), ACCENT);
   // Accent touches: a thin coloured line along each ledge top, next to the ink outline.
   for (const pl of place.platforms) {
     g.lineStyle(2.5, ACCENT, 0.85);

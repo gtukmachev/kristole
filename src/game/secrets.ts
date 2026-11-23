@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ACC, GROUND_Y, INK, INK_SOFT } from './constants';
-import type { PlaceId } from './places';
+import type { PlaceDef, PlaceId } from './places';
 import type { Rect } from './Player';
 
 /**
@@ -37,6 +37,18 @@ export const SECRETS: Partial<Record<PlaceId, SecretDef[]>> = {
   ramparts: [{ kind: 'birds', x: 300, y: G - 185 }, { kind: 'pot', x: 640, y: G }],
   throne: [{ kind: 'candles', x: 540, y: G, x2: 740 }, { kind: 'skull', x: 1050, y: G - 195 }],
 };
+
+/** v5 places: two hidden things per place, picked from the chapter's theme. */
+export function autoSecrets(p: PlaceDef, chapter: number): SecretDef[] {
+  const kinds: SecretKind[][] = [['crate', 'birds'], ['crate', 'pot'], ['birds', 'pot'], ['skull', 'crate'], ['pot', 'crate'], ['crate', 'candles'], ['crate', 'birds']];
+  const [k1, k2] = kinds[chapter - 3] ?? ['pot', 'crate'];
+  const out: SecretDef[] = [];
+  const pl = p.platforms[0];
+  if (pl) out.push({ kind: k1, x: pl.x + pl.w / 2 - 26, y: pl.y });
+  const free = [150, 1130, 470, 810].find((x) => p.spots.every((s) => Math.abs(s.x - x) > 100)) ?? 150;
+  out.push(k2 === 'candles' ? { kind: k2, x: free - 35, y: G, x2: free + 35 } : { kind: k2, x: free, y: G });
+  return out;
+}
 
 interface Part {
   x: number;

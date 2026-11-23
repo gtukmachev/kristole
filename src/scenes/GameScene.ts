@@ -6,7 +6,7 @@ import { CHAPTERS, buildLevel, type LevelDef, type ZombieSize } from '../game/da
 import { CAMP_PERK_SPOTS, chapterOfPlace, placeOf, type PlaceDef, type PlaceId, type SpotKind } from '../game/places';
 import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId } from '../game/perks';
 import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
-import { SECRETS, Secret } from '../game/secrets';
+import { SECRETS, Secret, autoSecrets } from '../game/secrets';
 import { keyLog } from '../keyDebug';
 import type { AmbientMode } from '../game/ambient';
 import { drawBackground, groundKey } from '../game/background';
@@ -45,11 +45,15 @@ interface PerkPickup {
   born: number;
 }
 
-const AMBIENT: Record<PlaceId, AmbientMode> = {
+const AMBIENT: Record<PlaceId, AmbientMode | undefined> = {
   cliffFoot: 'sky', caveDoor: 'sky', caveInside: 'none', cliffPath: 'sky', summit: 'sky',
   graveGates: 'night', crypts: 'night', chapel: 'night', openGraves: 'night', mausoleum: 'night',
   moat: 'sky', courtyard: 'torches', armory: 'none', ramparts: 'sky', throne: 'none',
   trailhead: 'sky', graveLane: 'night', castleRoad: 'sky',
+  // v5: indoor places are quiet, outdoor ones get clouds and birds
+  court: 'none', shuttleHall: 'none', hangar: 'none', barn: 'none', hold: 'none', cabin: 'none',
+  mallDoors: 'none', escalators: 'none', shops: 'none', checkout: 'none', parking: 'none', mallCamp: 'none',
+  counter: 'none', kitchen: 'none', playground: 'none', terminal: 'none', checkin: 'none', baggage: 'none', gates: 'none', airportCamp: 'none',
 };
 
 /** Size of the dark opening a zombie steps out of. */
@@ -121,6 +125,11 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private ash!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Perk slots pressed since the last frame (by physical key, so any layout and the numpad work). */
   private perkPresses: number[] = [];
+  // ---- v5: badminton shuttlecocks and the helicopter of the army base
+  private shuttles: { g: Phaser.GameObjects.Graphics; x: number; y: number; vx: number; vy: number; dmg: number; dir: number }[] = [];
+  private heli?: { g: Phaser.GameObjects.Graphics; x: number; dir: number; t: number };
+  private heliQueue: ZombieSize[] = [];
+  private heliDropT = 0;
 
   constructor() {
     super('Game');
@@ -157,6 +166,10 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.spears = [];
     this.angel = undefined;
     this.dawn = undefined;
+    this.shuttles = [];
+    this.heli = undefined;
+    this.heliQueue = [];
+    this.heliDropT = 0;
   }
 
   private get isCamp() {
@@ -172,7 +185,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.physics.world.timeScale = 1;
     this.tweens.timeScale = 1;
     drawBackground(this, this.place);
-    this.ambient = new Ambient(this, AMBIENT[this.place.id]);
+    this.ambient = new Ambient(this, AMBIENT[this.place.id] ?? 'sky');
 
     const params = new URLSearchParams(window.location.search);
     this.player = new Player(this, this, this.fromPlace ? ARENA_LEFT + 40 : WIDTH / 2, this.weaponId, storage.getProfile());
@@ -246,7 +259,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }).setDepth(56);
 
     this.createHud();
-    for (const d of SECRETS[this.place.id] ?? []) {
+    for (const d of SECRETS[this.place.id] ?? (this.isCamp || this.chapter < 3 ? [] : autoSecrets(this.place, this.chapter))) {
       this.secrets.push(new Secret(this, d, (x, y) => {
         this.dustAt(x, y, 8);
         this.spawnPerk(randomPerk(), x, y, true);
@@ -266,6 +279,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
     sfx.playMusic('game');
     if (this.place.heart) this.spawnHeart(this.place.heart.x, this.place.heart.y, false);
+    if (this.place.entrance === 'heli') this.heli = { g: this.add.graphics().setDepth(12), x: -200, dir: 1, t: 0 };
     if (this.isCamp) {
       // level 0: three free perks, take one
       freeChoice().forEach((id, i) => this.spawnPerk(id, CAMP_PERK_SPOTS[i].x, CAMP_PERK_SPOTS[i].y, false, true));
@@ -409,6 +423,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       if (!this.player.dead) sc.playerNear(this.player.x, this.player.footY);
     }
     this.updatePickups();
+    this.updateShuttles(dt);
+    this.updateHeli(dt);
 
     this.ambient.update(dt);
     this.updateWaves(dt);
@@ -517,6 +533,12 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private spawnZombie(size: ZombieSize) {
     const e = this.place.entrance;
+    if (e === 'heli') {
+      // they drop out of the helicopter when it flies over
+      this.heliQueue.push(size);
+      this.pending++;
+      return;
+    }
     if (e === 'rise') return this.spawnRise(size, this.randomXAway());
     if (e === 'parachute') {
       // the giant is too heavy for a parachute
@@ -804,6 +826,98 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
   }
 
+  // ---- v5: helicopter drops and shuttlecocks ----------------------------------
+
+  private updateHeli(dt: number) {
+    const h = this.heli;
+    if (!h) return;
+    h.t += dt;
+    h.x += h.dir * 300 * dt;
+    if (h.x > WIDTH + 220) h.dir = -1;
+    if (h.x < -220) h.dir = 1;
+    this.heliDropT -= dt;
+    const over = h.x > ARENA_LEFT + 90 && h.x < ARENA_RIGHT - 90;
+    if (over && this.heliQueue.length && this.heliDropT <= 0 && this.phase === 'wave') {
+      this.heliDropT = 0.7;
+      const size = this.heliQueue.shift()!;
+      this.pending--;
+      const z = new Zombie(this, this, size, h.x, this.level.strength, this.variantFor(), 'drop', 190);
+      this.zombies.push(z);
+    }
+    // draw: body, tail boom, spinning rotor, skids
+    const g = h.g;
+    g.clear();
+    const y = 120 + Math.sin(h.t * 2) * 6, d = h.dir;
+    g.fillStyle(0xe6e5df, 1);
+    g.fillEllipse(h.x, y, 130, 56);
+    g.lineStyle(4, INK, 1);
+    g.strokeEllipse(h.x, y, 130, 56);
+    g.lineStyle(9, INK, 1);
+    g.lineBetween(h.x - d * 55, y - 4, h.x - d * 140, y - 14);
+    g.lineStyle(4, INK, 1);
+    g.lineBetween(h.x - d * 140, y - 34, h.x - d * 140, y + 6);
+    g.fillStyle(0xffffff, 1);
+    g.fillEllipse(h.x + d * 34, y - 6, 40, 26);
+    g.strokeEllipse(h.x + d * 34, y - 6, 40, 26);
+    g.lineStyle(4, ACC.main, 1);
+    g.lineBetween(h.x - 50, y + 10, h.x + 40, y + 10);
+    g.lineStyle(4, INK, 1);
+    g.lineBetween(h.x, y - 28, h.x, y - 40);
+    const blade = Math.abs(Math.sin(h.t * 30)) * 120 + 20;
+    g.lineBetween(h.x - blade, y - 40, h.x + blade, y - 40);
+    g.lineBetween(h.x - 50, y + 44, h.x + 50, y + 44);
+    g.lineBetween(h.x - 30, y + 24, h.x - 34, y + 44);
+    g.lineBetween(h.x + 30, y + 24, h.x + 34, y + 44);
+  }
+
+  zombieShoot(z: Zombie) {
+    const p = this.player;
+    const hand = z.lastPoints?.hand ?? { x: z.x, y: z.footY - z.height * 0.7 };
+    const hb = p.hurtbox();
+    const tx = p.x, ty = (hb.top + hb.bottom) / 2;
+    const dir = Math.sign(tx - hand.x) || 1;
+    const vx = dir * 470;
+    const t = Math.max(0.3, Math.abs(tx - hand.x) / 470);
+    const vy = (ty - hand.y - 0.5 * 900 * t * t) / t;
+    this.shuttles.push({ g: this.add.graphics().setDepth(22), x: hand.x, y: hand.y - 20, vx, vy, dmg: Math.round(z.damage * 0.6), dir });
+    sfx.swing(false);
+  }
+
+  private updateShuttles(dt: number) {
+    const p = this.player;
+    for (const s of this.shuttles) {
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.vy += 900 * dt;
+      const a = Math.atan2(s.vy, s.vx);
+      const g = s.g;
+      g.clear();
+      // feathered cone with a cork tip in the accent colour
+      const c = Math.cos(a), sn = Math.sin(a);
+      const back = { x: s.x - c * 18, y: s.y - sn * 18 };
+      g.fillStyle(0xffffff, 1);
+      g.fillTriangle(s.x, s.y, back.x - sn * 9, back.y + c * 9, back.x + sn * 9, back.y - c * 9);
+      g.lineStyle(2, INK, 1);
+      g.strokeTriangle(s.x, s.y, back.x - sn * 9, back.y + c * 9, back.x + sn * 9, back.y - c * 9);
+      g.fillStyle(ACC.main, 1);
+      g.fillCircle(s.x, s.y, 4.5);
+      const hit = !p.dead && overlap({ left: s.x - 8, right: s.x + 8, top: s.y - 8, bottom: s.y + 8 }, p.hurtbox());
+      if (hit) {
+        const res = p.damage(s.dmg, s.dir);
+        if (res === 'hit') {
+          this.spill(p.x, s.y, s.dir, 10);
+          this.cameras.main.shake(100, 0.004);
+        } else if (res === 'blocked') this.impact(s.x, s.y, 0.8);
+      }
+      if (hit || s.y > GROUND_Y + 4 || s.x < ARENA_LEFT - 40 || s.x > ARENA_RIGHT + 40) {
+        if (!hit) this.dustAt(s.x, GROUND_Y, 3);
+        s.g.destroy();
+        s.x = NaN;
+      }
+    }
+    this.shuttles = this.shuttles.filter((s) => !Number.isNaN(s.x));
+  }
+
   // ---- moving on to the next place -----------------------------------------
 
   private openExit() {
@@ -841,7 +955,17 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const r = Math.random();
     if (this.chapter === 0) return r < 0.25 ? 'bandage' : 'plain';
     if (this.chapter === 1) return r < 0.35 ? 'tophat' : r < 0.55 ? 'bandage' : 'plain';
-    return r < 0.6 ? 'helmet' : r < 0.75 ? 'bandage' : 'plain';
+    if (this.chapter === 2) return r < 0.6 ? 'helmet' : r < 0.75 ? 'bandage' : 'plain';
+    const own: ZombieVariant[][] = [
+      ['football', 'basket', 'badminton'], ['soldier'], ['farmer', 'farmerHat'], ['pirate'], ['cashier'], ['cook'], ['pilot'],
+    ];
+    const pool = own[this.chapter - 3] ?? ['plain'];
+    // the stadium: mostly the sport of the place
+    if (this.chapter === 3) {
+      const main = (['football', 'football', 'basket', 'badminton', 'football'] as ZombieVariant[])[Math.max(0, this.levelIdx)];
+      return r < 0.6 ? main : pool[Math.floor(Math.random() * pool.length)];
+    }
+    return r < 0.85 ? pool[Math.floor(Math.random() * pool.length)] : r < 0.93 ? 'bandage' : 'plain';
   }
 
   /** Short beginner tips in chapter one, each shown once per browser. */

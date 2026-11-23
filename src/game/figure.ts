@@ -65,7 +65,9 @@ export const ease = {
   in: (t: number) => t * t,
 };
 
-export type ZombieVariant = 'plain' | 'bandage' | 'tophat' | 'helmet';
+export type ZombieVariant = 'plain' | 'bandage' | 'tophat' | 'helmet'
+  // v5 chapters
+  | 'football' | 'basket' | 'badminton' | 'soldier' | 'farmer' | 'farmerHat' | 'pirate' | 'cashier' | 'cook' | 'pilot';
 
 export interface FigureStyle {
   kind: 'player' | 'zombie';
@@ -249,7 +251,89 @@ export function drawFigure(
     }
   }
 
+  if (isZombie) drawZombieExtras(g, { H, S, HD, FH, ff: T(fFoot), bf: T(bFoot) }, scale, facing, alpha, style.variant ?? 'plain', base);
   return { hip: H, shoulder: S, head: HD, hand: FH, tip: tipW, headR };
+}
+
+/** Body things of the v5 zombies: jerseys, aprons, ties, boots, rackets. */
+function drawZombieExtras(
+  g: Phaser.GameObjects.Graphics, p: { H: V; S: V; HD: V; FH: V; ff: V; bf: V }, scale: number, facing: number, alpha: number, v: ZombieVariant, base: number,
+) {
+  const { H, S } = p;
+  const lw = Math.max(1.5, base * 0.6);
+  const along = (k: number): V => ({ x: S.x + (H.x - S.x) * k, y: S.y + (H.y - S.y) * k });
+  switch (v) {
+    case 'football': {
+      // white number patch on the chest: a big "9"
+      const c = along(0.38);
+      g.fillStyle(0xffffff, alpha);
+      g.fillCircle(c.x, c.y, 7 * scale);
+      g.lineStyle(lw, C_INK, alpha);
+      g.strokeCircle(c.x, c.y - 1.5 * scale, 2.4 * scale);
+      g.lineBetween(c.x + 2.4 * scale, c.y - 1.5 * scale, c.x + 1 * scale, c.y + 4.5 * scale);
+      break;
+    }
+    case 'badminton': {
+      // racket in the front hand
+      const h = p.FH;
+      const tipX = h.x + facing * 6 * scale, tipY = h.y - 22 * scale;
+      g.lineStyle(lw, C_INK, alpha);
+      g.lineBetween(h.x, h.y, tipX, tipY);
+      g.fillStyle(0xffffff, alpha * 0.9);
+      g.fillEllipse(tipX + facing * 2 * scale, tipY - 8 * scale, 12 * scale, 17 * scale);
+      g.strokeEllipse(tipX + facing * 2 * scale, tipY - 8 * scale, 12 * scale, 17 * scale);
+      g.lineStyle(Math.max(0.8, lw * 0.4), C_INK, alpha * 0.7);
+      for (const k of [-0.25, 0, 0.25]) {
+        g.lineBetween(tipX + facing * 2 * scale + k * 12 * scale, tipY - 15 * scale, tipX + facing * 2 * scale + k * 12 * scale, tipY - 1 * scale);
+        g.lineBetween(tipX + facing * 2 * scale - 5 * scale, tipY - 8 * scale + k * 17 * scale, tipX + facing * 2 * scale + 5 * scale, tipY - 8 * scale + k * 17 * scale);
+      }
+      break;
+    }
+    case 'farmer':
+    case 'farmerHat': {
+      // rubber boots
+      g.fillStyle(C_INK, alpha);
+      for (const f of [p.ff, p.bf]) {
+        g.fillRect(f.x - 4 * scale, f.y - 12 * scale, 8 * scale, 12 * scale);
+        g.fillEllipse(f.x + facing * 3 * scale, f.y - 1.5 * scale, 13 * scale, 6 * scale);
+      }
+      break;
+    }
+    case 'cashier': {
+      // name badge
+      const c = along(0.3);
+      g.fillStyle(0xffffff, alpha);
+      g.fillRect(c.x + facing * 2 * scale - 4 * scale, c.y - 3 * scale, 8 * scale, 5 * scale);
+      g.lineStyle(lw * 0.7, C_INK, alpha);
+      g.strokeRect(c.x + facing * 2 * scale - 4 * scale, c.y - 3 * scale, 8 * scale, 5 * scale);
+      break;
+    }
+    case 'cook': {
+      // apron from the chest down over the hips
+      const a = along(0.25), b = along(1.0);
+      const w1 = 7 * scale, w2 = 11 * scale;
+      const pts = [
+        { x: a.x - w1, y: a.y }, { x: a.x + w1, y: a.y }, { x: b.x + w2, y: b.y + 14 * scale }, { x: b.x - w2, y: b.y + 14 * scale },
+      ];
+      g.fillStyle(0xffffff, alpha);
+      g.fillPoints(P(pts), true);
+      g.lineStyle(lw, C_INK, alpha);
+      g.strokePoints(P(pts), true);
+      g.lineBetween(a.x - w1, a.y, S.x - 3 * scale, S.y - 2 * scale);
+      break;
+    }
+    case 'pilot': {
+      // tie
+      const a = along(0.05), b = along(0.55);
+      g.fillStyle(C_INK, alpha);
+      g.fillTriangle(a.x - 2.5 * scale, a.y, a.x + 2.5 * scale, a.y, b.x, b.y);
+      g.fillStyle(0xffffff, alpha);
+      g.fillCircle(a.x, a.y + 1, 1.6 * scale);
+      break;
+    }
+    default:
+      break;
+  }
 }
 
 function drawZombieTorso(g: Phaser.GameObjects.Graphics, H: V, S: V, scale: number, alpha: number, seed: number) {
@@ -321,6 +405,125 @@ function drawZombieVariant(g: Phaser.GameObjects.Graphics, c: V, r: number, faci
       g.lineStyle(Math.max(2, base * 0.8), C_INK, alpha);
       g.lineBetween(c.x, c.y - r * 1.3, c.x - facing * r * 1.1, c.y - r * 2.0);
       g.lineBetween(c.x - facing * r * 0.3, c.y - r * 1.3, c.x - facing * r * 1.3, c.y - r * 1.7);
+      break;
+    }
+    case 'basket': {
+      // sweatband
+      g.lineStyle(r * 0.4, C_INK, alpha);
+      g.lineBetween(c.x - r * 0.98, c.y - r * 0.45, c.x + r * 0.98, c.y - r * 0.45);
+      g.lineStyle(r * 0.12, 0xffffff, alpha);
+      g.lineBetween(c.x - r * 0.9, c.y - r * 0.45, c.x + r * 0.9, c.y - r * 0.45);
+      break;
+    }
+    case 'football': {
+      // spiky hair
+      g.lineStyle(Math.max(1.5, base * 0.6), C_INK, alpha);
+      for (let k = -2; k <= 2; k++) g.lineBetween(c.x + k * r * 0.35, c.y - r * 0.9, c.x + k * r * 0.45 - facing * r * 0.2, c.y - r * 1.45);
+      break;
+    }
+    case 'badminton': {
+      // visor
+      g.lineStyle(r * 0.3, C_INK, alpha);
+      g.lineBetween(c.x - r * 0.95, c.y - r * 0.55, c.x + r * 0.8, c.y - r * 0.55);
+      g.fillStyle(C_INK, alpha);
+      g.fillTriangle(c.x + facing * r * 0.6, c.y - r * 0.7, c.x + facing * r * 1.7, c.y - r * 0.45, c.x + facing * r * 0.6, c.y - r * 0.35);
+      break;
+    }
+    case 'soldier': {
+      // army helmet: dome with a rim and a chin strap, a few camo spots
+      const dome: V[] = [];
+      const R = r * 1.25;
+      for (let k = 0; k <= 12; k++) {
+        const a = Math.PI + (Math.PI * k) / 12;
+        dome.push({ x: c.x + Math.cos(a) * R, y: c.y - r * 0.2 + Math.sin(a) * R * 0.95 });
+      }
+      g.fillStyle(C_INK, alpha);
+      g.fillPoints(P(dome), true);
+      g.fillRect(c.x - R * 1.12, c.y - r * 0.3, R * 2.24, r * 0.26);
+      g.fillStyle(C_FILL, alpha * 0.8);
+      g.fillCircle(c.x - r * 0.4, c.y - r * 0.9, r * 0.2);
+      g.fillCircle(c.x + r * 0.35, c.y - r * 1.1, r * 0.15);
+      g.lineStyle(Math.max(1, base * 0.3), C_INK, alpha);
+      g.lineBetween(c.x - facing * r * 0.7, c.y - r * 0.1, c.x + facing * r * 0.1, c.y + r * 0.95);
+      break;
+    }
+    case 'farmer':
+    case 'farmerHat': {
+      // scruffy beard round the chin
+      const beard: V[] = [];
+      for (let k = 0; k <= 10; k++) {
+        const a = 0.15 + (Math.PI - 0.3) * (k / 10);
+        const rr = r * (k % 2 ? 1.25 : 1.45);
+        beard.push({ x: c.x + facing * Math.cos(a) * r * 0.2 + Math.cos(a) * rr * 0.9, y: c.y + r * 0.1 + Math.sin(a) * rr * 0.75 });
+      }
+      g.fillStyle(C_INK, alpha);
+      g.fillPoints(P(beard), true);
+      if (v === 'farmerHat') {
+        // straw hat
+        g.fillStyle(0xf2e6c4, alpha);
+        g.fillEllipse(c.x, c.y - r * 0.75, r * 3.2, r * 0.8);
+        g.lineStyle(Math.max(1.5, base * 0.6), C_INK, alpha);
+        g.strokeEllipse(c.x, c.y - r * 0.75, r * 3.2, r * 0.8);
+        g.fillStyle(0xf2e6c4, alpha);
+        g.fillRect(c.x - r * 0.75, c.y - r * 1.65, r * 1.5, r * 0.9);
+        g.strokeRect(c.x - r * 0.75, c.y - r * 1.65, r * 1.5, r * 0.9);
+      }
+      break;
+    }
+    case 'pirate': {
+      // bandana with a knot behind, eye patch with a strap
+      const cap: V[] = [];
+      for (let k = 0; k <= 10; k++) {
+        const a = Math.PI + (Math.PI * k) / 10;
+        cap.push({ x: c.x + Math.cos(a) * r * 1.08, y: c.y - r * 0.2 + Math.sin(a) * r * 1.0 });
+      }
+      g.fillStyle(C_INK, alpha);
+      g.fillPoints(P(cap), true);
+      g.fillStyle(0xffffff, alpha);
+      g.fillCircle(c.x - r * 0.3, c.y - r * 0.75, r * 0.13);
+      g.fillCircle(c.x + r * 0.35, c.y - r * 0.6, r * 0.13);
+      g.fillStyle(C_INK, alpha);
+      g.fillTriangle(c.x - facing * r * 0.9, c.y - r * 0.4, c.x - facing * r * 1.9, c.y - r * 0.1, c.x - facing * r * 1.5, c.y + r * 0.4);
+      g.fillCircle(c.x + facing * r * 0.45, c.y - r * 0.1, r * 0.32);
+      g.lineStyle(Math.max(1, base * 0.35), C_INK, alpha);
+      g.lineBetween(c.x + facing * r * 0.45, c.y - r * 0.1, c.x - facing * r * 0.9, c.y - r * 0.55);
+      break;
+    }
+    case 'cashier': {
+      // cashier's cap with a flap over the back of the head
+      const R = r * 1.1;
+      const cap: V[] = [];
+      for (let k = 0; k <= 10; k++) {
+        const a = Math.PI + (Math.PI * k) / 10;
+        cap.push({ x: c.x + Math.cos(a) * R, y: c.y - r * 0.25 + Math.sin(a) * R * 0.85 });
+      }
+      cap.push({ x: c.x - facing * R, y: c.y + r * 0.6 }, { x: c.x - facing * R * 0.55, y: c.y + r * 0.6 });
+      g.fillStyle(0xffffff, alpha);
+      g.fillPoints(P(cap), true);
+      g.lineStyle(Math.max(1.5, base * 0.6), C_INK, alpha);
+      g.strokePoints(P(cap), true);
+      g.lineBetween(c.x - R, c.y - r * 0.3, c.x + R, c.y - r * 0.3);
+      break;
+    }
+    case 'cook': {
+      // tall paper hat
+      g.fillStyle(0xffffff, alpha);
+      g.fillRect(c.x - r * 0.8, c.y - r * 2.1, r * 1.6, r * 1.3);
+      g.fillCircle(c.x - r * 0.4, c.y - r * 2.1, r * 0.5);
+      g.fillCircle(c.x + r * 0.4, c.y - r * 2.1, r * 0.5);
+      g.lineStyle(Math.max(1.5, base * 0.6), C_INK, alpha);
+      g.strokeRect(c.x - r * 0.8, c.y - r * 2.0, r * 1.6, r * 1.2);
+      g.lineBetween(c.x - r * 0.85, c.y - r * 1.05, c.x + r * 0.85, c.y - r * 1.05);
+      break;
+    }
+    case 'pilot': {
+      // pilot's cap: flat top, black peak, white badge
+      g.fillStyle(C_INK, alpha);
+      g.fillEllipse(c.x - facing * r * 0.1, c.y - r * 1.15, r * 2.5, r * 0.7);
+      g.fillRect(c.x - r * 0.95, c.y - r * 1.15, r * 1.9, r * 0.6);
+      g.fillTriangle(c.x + facing * r * 0.2, c.y - r * 0.6, c.x + facing * r * 1.6, c.y - r * 0.45, c.x + facing * r * 0.2, c.y - r * 0.35);
+      g.fillStyle(0xffffff, alpha);
+      g.fillCircle(c.x + facing * r * 0.25, c.y - r * 0.9, r * 0.2);
       break;
     }
     default:

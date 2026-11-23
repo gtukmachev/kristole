@@ -1,6 +1,6 @@
 import type { WeaponId } from './storage';
 
-export type BackgroundId = 'cliff' | 'graveyard' | 'castle';
+export type BackgroundId = 'cliff' | 'graveyard' | 'castle' | 'stadium' | 'army' | 'village' | 'ship' | 'mall' | 'burger' | 'airport';
 
 export interface ChapterDef {
   title: string;
@@ -13,6 +13,14 @@ export const CHAPTERS: ChapterDef[] = [
   { title: 'CHAPTER ONE', name: 'The Cliff', bg: 'cliff', levels: 5 },
   { title: 'CHAPTER TWO', name: 'The Graveyard', bg: 'graveyard', levels: 5 },
   { title: 'CHAPTER THREE', name: 'The Castle', bg: 'castle', levels: 5 },
+  // v5: seven more chapters
+  { title: 'CHAPTER FOUR', name: 'The Stadium', bg: 'stadium', levels: 5 },
+  { title: 'CHAPTER FIVE', name: 'The Army Base', bg: 'army', levels: 5 },
+  { title: 'CHAPTER SIX', name: 'The Village', bg: 'village', levels: 5 },
+  { title: 'CHAPTER SEVEN', name: 'The Pirate Ship', bg: 'ship', levels: 5 },
+  { title: 'CHAPTER EIGHT', name: 'The Mall', bg: 'mall', levels: 5 },
+  { title: 'CHAPTER NINE', name: 'Braaains Burger', bg: 'burger', levels: 5 },
+  { title: 'CHAPTER TEN', name: 'The Airport', bg: 'airport', levels: 5 },
 ];
 
 export interface WeaponDef {
@@ -108,12 +116,14 @@ function rng(seed: number) {
 
 export function buildLevel(chapter: number, level: number): LevelDef {
   const ch = CHAPTERS[chapter];
-  const n = chapter * 5 + level; // overall difficulty step 0..14
-  const rand = rng(1000 + n * 97);
+  const step = chapter * 5 + level; // 0..49
+  // After the first three chapters the game gets harder only slowly (perks do the rest).
+  const n = step <= 14 ? step : 14 + (step - 14) * 0.3;
+  const rand = rng(1000 + step * 97);
   const waveCount = 4; // v4.1: four waves per level, then you move on to a new place
   const waves: WaveDef[] = [];
   for (let w = 0; w < waveCount; w++) {
-    const count = 4 + n + w * 2;
+    const count = Math.min(20, Math.round(4 + n + w * 2));
     const pBig = Math.min(0.35, 0.02 + n * 0.025 + w * 0.02);
     const pSmall = 0.3;
     const zombies: ZombieSize[] = [];

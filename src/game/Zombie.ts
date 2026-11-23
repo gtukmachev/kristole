@@ -22,6 +22,8 @@ export interface ZombieHost {
   zombieStrike(z: Zombie, band: Rect): void;
   zombieGone(z: Zombie): void;
   dustAt(x: number, y: number, n: number): void;
+  /** Badminton zombies serve a shuttlecock at the player. */
+  zombieShoot?(z: Zombie): void;
 }
 
 /** rise: out of the earth; emerge: walks out of a door/coffin/barrel; drop: falls from a ledge/window; parachute: floats down. */
@@ -66,6 +68,7 @@ export class Zombie {
   private retaliateDir = 0;
   /** Dawn perk: crumbles to dust instead of falling dead. */
   ash = false;
+  private shootCooldown = 1.5 + Math.random() * 2;
 
   constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number, readonly variant: ZombieVariant = 'plain', readonly spawn: SpawnMode = 'rise', startY = GROUND_Y) {
     this.def = ZOMBIES[size];
@@ -240,6 +243,16 @@ export class Zombie {
           if (!d.heavy && near && this.lungeCooldown <= 0 && !this.blocked) {
             this.lungeUntil = this.time + 0.4;
             this.lungeCooldown = 2.5 + Math.random() * 3;
+          }
+          // v5 zombies: basketball players jump about, badminton players serve shuttlecocks from afar
+          if (this.variant === 'basket' && this.body.blocked.down && Math.random() < dt * 0.6) this.body.setVelocityY(-760);
+          this.shootCooldown -= dt;
+          if (this.variant === 'badminton' && !player.dead && dist > 220 && dist < 820 && this.shootCooldown <= 0 && this.host.zombieShoot) {
+            this.shootCooldown = 2.8 + Math.random() * 2.2;
+            this.host.zombieShoot(this);
+            this.body.setVelocityX(0);
+            this.setState('recover');
+            break;
           }
           const lunge = this.time < this.lungeUntil ? 2.6 : 1;
           const sp = player.dead ? this.speed * 0.3 : this.speed * lunge * (this.blocked ? 0.15 : 1);
