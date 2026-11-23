@@ -32,7 +32,7 @@ export const PERKS: PerkDef[] = [
   { id: 'invis', name: 'INVISIBLE', key: '5', durationMs: PERK_DEFAULT_DURATION, weight: 3, blurb: 'Zombies can\'t see you', info: "Zombies stop looking for you and wander. One you hit swings back the way the hit came." },
   { id: 'berserk', name: 'BERSERK', key: '6', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Wild whirl, 5x faster hits', info: "You whirl your weapon both ways, 5× faster. Hits still hurt, but nothing stops the whirl." },
   { id: 'invinc', name: 'COCOON', key: '7', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Nothing can hurt you', info: "An unbreakable cocoon around you: nothing can hurt you." },
-  { id: 'ghost', name: 'GHOST', key: '8', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Fly through walls and zombies', info: "Smaller and flying (↑ / ↓) through ledges and zombies. Your hits do double damage." },
+  { id: 'ghost', name: 'GHOST', key: '8', durationMs: PERK_DEFAULT_DURATION, weight: 2, blurb: 'Fly through walls and zombies', info: "Smaller, can't be hurt, flies (↑ / ↓) through ledges and zombies. Your hits do double damage." },
   { id: 'angel', name: 'ANGEL', key: '9', durationMs: 12_000, weight: 2, blurb: 'An angel fights for you', info: "An angel flies down and strikes the zombies nearest to you." },
   { id: 'dawn', name: 'DAWN', key: '0', durationMs: 8_000, weight: 1, blurb: 'All zombies turn to dust', info: "The sun rises: every zombie turns to dust, and new ones too." },
 ];

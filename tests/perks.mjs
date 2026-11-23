@@ -67,6 +67,9 @@ await hold('ArrowUp', 900);
 s = await snap();
 ok(s.perksOn.includes('ghost') && s.player.y < 450, `GHOST flies up (y=${s.player.y})`);
 await page.screenshot({ path: 'tests/shots/v4-ghost.png' });
+await page.evaluate(() => { const sc = window.__scene; sc.player.god = false; sc.player.damage(30, 1); });
+s = await snap();
+ok(s.hp === 100, `GHOST can't be hurt (hp ${s.hp})`);
 // cocoon, berserk, invisible, angel
 await tap('7'); await tap('6'); await tap('5'); await tap('9');
 await sleep(500);

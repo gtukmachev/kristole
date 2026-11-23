@@ -242,6 +242,7 @@ export class Player {
 
   damage(amount: number, fromDir: number): HitResult {
     if (this.invulnerable) return 'ignored';
+    if (this.fx.ghost) return 'ignored'; // blows pass right through a ghost
     if (this.fx.invinc) {
       this.blockFlashUntil = this.time + 0.2;
       this.body.setVelocityX(fromDir * 160);
