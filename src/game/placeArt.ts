@@ -541,7 +541,11 @@ export function drawPlace(g: G, place: PlaceDef) {
   const chapter = chapterOfPlace(place.id);
   ACCENT = ACCENTS[chapter].main;
   if (painters[place.id]) painters[place.id](g, place);
-  else paintV5(g, place, chapter, CAMPS[chapter]?.id === place.id ? -1 : PLACES[chapter].findIndex((q) => q.id === place.id), ACCENT);
+  else if (!paintV5(g, place, chapter, CAMPS[chapter]?.id === place.id ? -1 : PLACES[chapter].findIndex((q) => q.id === place.id), ACCENT)) {
+    // test hook: tests/places.mjs fails on places nobody paints
+    const w = window as unknown as { __unpainted?: string[] };
+    (w.__unpainted ??= []).push(place.id);
+  }
   // Accent touches: a thin coloured line along each ledge top, next to the ink outline.
   for (const pl of place.platforms) {
     g.lineStyle(2.5, ACCENT, 0.85);

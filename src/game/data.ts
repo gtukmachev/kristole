@@ -123,7 +123,7 @@ export function buildLevel(chapter: number, level: number): LevelDef {
   const waveCount = 4; // v4.1: four waves per level, then you move on to a new place
   const waves: WaveDef[] = [];
   for (let w = 0; w < waveCount; w++) {
-    const count = Math.min(20, Math.round(4 + n + w * 2));
+    const count = Math.round(4 + n + w * 2) > 20 && step > 14 ? 20 : Math.round(4 + n + w * 2);
     const pBig = Math.min(0.35, 0.02 + n * 0.025 + w * 0.02);
     const pSmall = 0.3;
     const zombies: ZombieSize[] = [];

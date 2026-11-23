@@ -836,11 +836,13 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     if (h.x > WIDTH + 220) h.dir = -1;
     if (h.x < -220) h.dir = 1;
     this.heliDropT -= dt;
-    const over = h.x > ARENA_LEFT + 90 && h.x < ARENA_RIGHT - 90;
+    const over = h.x > ARENA_LEFT + 90 && h.x < ARENA_RIGHT - 90 && Math.abs(h.x - this.player.x) > 200;
     if (over && this.heliQueue.length && this.heliDropT <= 0 && this.phase === 'wave') {
       this.heliDropT = 0.7;
       const size = this.heliQueue.shift()!;
       this.pending--;
+      // the giant is too heavy to jump out: it climbs out of the ground instead
+      if (size === 'giant') return void this.spawnRise(size, this.randomXAway());
       const z = new Zombie(this, this, size, h.x, this.level.strength, this.variantFor(), 'drop', 190);
       this.zombies.push(z);
     }
@@ -878,8 +880,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const dir = Math.sign(tx - hand.x) || 1;
     const vx = dir * 470;
     const t = Math.max(0.3, Math.abs(tx - hand.x) / 470);
-    const vy = (ty - hand.y - 0.5 * 900 * t * t) / t;
-    this.shuttles.push({ g: this.add.graphics().setDepth(22), x: hand.x, y: hand.y - 20, vx, vy, dmg: Math.round(z.damage * 0.6), dir });
+    const y0 = hand.y - 20;
+    const vy = (ty - y0 - 0.5 * 900 * t * t) / t;
+    this.shuttles.push({ g: this.add.graphics().setDepth(22), x: hand.x, y: y0, vx, vy, dmg: Math.round(z.damage * 0.6), dir });
     sfx.swing(false);
   }
 
@@ -901,7 +904,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       g.strokeTriangle(s.x, s.y, back.x - sn * 9, back.y + c * 9, back.x + sn * 9, back.y - c * 9);
       g.fillStyle(ACC.main, 1);
       g.fillCircle(s.x, s.y, 4.5);
-      const hit = !p.dead && overlap({ left: s.x - 8, right: s.x + 8, top: s.y - 8, bottom: s.y + 8 }, p.hurtbox());
+      const live = this.phase === 'wave' || this.phase === 'between';
+      const hit = live && !p.dead && overlap({ left: s.x - 8, right: s.x + 8, top: s.y - 8, bottom: s.y + 8 }, p.hurtbox());
       if (hit) {
         const res = p.damage(s.dmg, s.dir);
         if (res === 'hit') {

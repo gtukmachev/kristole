@@ -424,7 +424,7 @@ function drawZombieVariant(g: Phaser.GameObjects.Graphics, c: V, r: number, faci
     case 'badminton': {
       // visor
       g.lineStyle(r * 0.3, C_INK, alpha);
-      g.lineBetween(c.x - r * 0.95, c.y - r * 0.55, c.x + r * 0.8, c.y - r * 0.55);
+      g.lineBetween(c.x - facing * r * 0.95, c.y - r * 0.55, c.x + facing * r * 0.8, c.y - r * 0.55);
       g.fillStyle(C_INK, alpha);
       g.fillTriangle(c.x + facing * r * 0.6, c.y - r * 0.7, c.x + facing * r * 1.7, c.y - r * 0.45, c.x + facing * r * 0.6, c.y - r * 0.35);
       break;

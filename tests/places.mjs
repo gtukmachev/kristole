@@ -9,11 +9,14 @@ for (let i = 0; i < 100 && !ready; i++) await sleep(100);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+const unpainted = [];
 const wait = Number(process.env.WAIT ?? 6500);
 for (let c = Number(process.env.FROM ?? 0); c < 10; c++) for (let l = -1; l < 5; l++) {
   await page.goto(`http://localhost:${PORT}/?scene=game&chapter=${c}&level=${l}&god=1`);
   await sleep(wait);
   await page.screenshot({ path: `tests/shots/place-${c}-${l}.png` });
+  unpainted.push(...await page.evaluate(() => window.__unpainted ?? []));
 }
+if (unpainted.length) console.log('FAIL places without a painter: ' + unpainted.join(', '));
 console.log(errors.length ? 'ERRORS ' + errors.join('\n') : 'no page errors');
 await browser.close(); server.kill();
