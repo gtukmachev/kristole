@@ -86,9 +86,12 @@ const st = await states();
 ok(st.includes('jumpWind') && st.includes('jumpUp'), `angry medium jumps (${st})`);
 ok(l[0]?.hit, `the jump strike reaches the player on the ledge (${JSON.stringify(l[0])})`);
 await page.screenshot({ path: 'tests/shots/v6-jump.png' });
-await sleep(1500);
-const zs = await page.evaluate(() => { const z = window.__scene.zombies.find((q) => q.__test); return { foot: z.footY, state: z.state }; });
-ok(zs.foot > 600, `it falls back to the ground (${JSON.stringify(zs)})`);
+let zs = null;
+for (let i = 0; i < 40 && !(zs?.foot > 605); i++) {
+  await sleep(50);
+  zs = await page.evaluate(() => { const z = window.__scene.zombies.find((q) => q.__test); return { foot: z.footY, state: z.state }; });
+}
+ok(zs.foot > 605, `it falls back to the ground through the ledge (${JSON.stringify(zs)})`);
 
 // 5. A real low swing from the ledge at a big zombie makes it angry.
 await setup('chapter=0&level=1');
