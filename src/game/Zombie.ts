@@ -5,7 +5,12 @@ import { drawFigure, ease, lerpPose, pose, BONES, type FigurePoints, type Pose, 
 import type { Player, Rect, SwingKind } from './Player';
 import { sfx } from './sfx';
 
-export type ZombieState = 'rising' | 'falling' | 'walk' | 'windup' | 'strike' | 'recover' | 'hurt' | 'dying';
+export type ZombieState = 'rising' | 'falling' | 'walk' | 'windup' | 'strike' | 'recover' | 'hurt' | 'dying' | 'jumpWind' | 'jumpUp';
+
+/** Low strike of the bigger zombies at a player who was already crouching (in base units, above the feet). */
+const LOW_BAND: [number, number] = [70, 0];
+/** How long a zombie stays angry after being hit from a ledge. */
+const ANGER_SEC = 6;
 
 const BASE_H = 110;
 const BASE_W = 30;
@@ -69,6 +74,12 @@ export class Zombie {
   /** Dawn perk: crumbles to dust instead of falling dead. */
   ash = false;
   private shootCooldown = 1.5 + Math.random() * 2;
+  /** This swing goes low: the player was already crouching when it started. */
+  private aimLow = false;
+  /** Hit from a ledge: until this time it jumps up at the player there. */
+  private angryUntil = 0;
+  /** The last strike was a jump attack: rest longer after landing. */
+  private jumped = false;
 
   constructor(scene: Phaser.Scene, private host: ZombieHost, readonly size: ZombieSize, x: number, strength: number, readonly variant: ZombieVariant = 'plain', readonly spawn: SpawnMode = 'rise', startY = GROUND_Y) {
     this.def = ZOMBIES[size];
@@ -122,7 +133,7 @@ export class Zombie {
   freeze(sec: number) {
     if (!this.alive || this.state === 'rising' || this.state === 'falling') return;
     this.frozenUntil = this.time + sec;
-    if (this.state === 'windup' || this.state === 'strike') this.setState('recover');
+    if (this.state === 'windup' || this.state === 'strike' || this.state === 'jumpWind' || this.state === 'jumpUp') this.setState('recover');
   }
 
   /** Dawn: turn to dust right away. */
@@ -135,6 +146,24 @@ export class Zombie {
     this.setState('dying');
     this.body.setAllowGravity(false);
     this.body.setVelocity(0, 0);
+  }
+
+  /** Hit by the player standing on a ledge above: jump up at them for a while. */
+  anger() {
+    this.angryUntil = this.time + ANGER_SEC;
+  }
+
+  /** Strike band (screen y: top < bottom) for a swing from the feet at `footY`. */
+  private band(low: boolean, footY = this.footY) {
+    const [top, bottom] = (low ? (this.size === 'small' ? this.def.attackBand : LOW_BAND) : this.def.attackBand).map((v) => v * FIG);
+    return { top: footY - top, bottom: footY - bottom + (low ? 4 : 0) };
+  }
+
+  /** Does a standing swing from here reach the player's body vertically? */
+  private reachesUp(player: Player) {
+    const b = this.band(this.size === 'small');
+    const hb = player.hurtbox();
+    return b.top < hb.bottom && b.bottom > hb.top;
   }
 
   /** Returns true if this hit killed it. */
@@ -172,6 +201,11 @@ export class Zombie {
   private setState(s: ZombieState) {
     this.state = s;
     this.stateT = 0;
+  }
+
+  private strike(low: boolean) {
+    const reachFar = this.x + this.facing * (this.def.reach * FIG + PLAYER_HALF + 8);
+    this.host.zombieStrike(this, { left: Math.min(this.x, reachFar), right: Math.max(this.x, reachFar), ...this.band(low) });
   }
 
   update(dt: number, player: Player) {
@@ -232,9 +266,21 @@ export class Zombie {
           break;
         }
         if (!player.dead) this.facing = dx >= 0 ? 1 : -1;
-        if (!player.dead && dist <= d.reach * FIG + PLAYER_HALF && Math.abs(player.footY - this.footY) < 140 * FIG) {
+        // The player standing on a ledge above (not just jumping): only swing if the blow really reaches.
+        const onLedge = player.onGround && this.footY - player.footY > 20;
+        const inReach = dist <= d.reach * FIG + PLAYER_HALF;
+        const angry = this.time < this.angryUntil && onLedge && !player.dead;
+        if (!player.dead && inReach && (Math.abs(player.footY - this.footY) < 140 * FIG || angry) && (!onLedge || this.reachesUp(player))) {
           this.body.setVelocityX(0);
+          // already crouching when the swing starts: the bigger ones aim low (ducking only dodges a swing begun on a standing player)
+          this.aimLow = !lowAttack && !onLedge && player.crouching;
           this.setState('windup');
+          sfx.zombieAttack();
+        } else if (angry && !lowAttack && this.size !== 'giant' && dist <= d.reach * FIG + PLAYER_HALF + 20 && this.body.blocked.down) {
+          // hit from a ledge and can't reach: crouch, then jump up and strike
+          this.body.setVelocityX(0);
+          this.aimLow = false;
+          this.setState('jumpWind');
           sfx.zombieAttack();
         } else {
           // Occasional lunge to close the distance (not the heavy ones).
@@ -269,15 +315,30 @@ export class Zombie {
         this.body.setVelocityX(0);
         if (this.stateT * 1000 >= d.windupMs) {
           this.setState('strike');
-          const reachFar = this.x + this.facing * (d.reach * FIG + PLAYER_HALF + 8);
+          this.strike(lowAttack || this.aimLow);
+          if (lowAttack || this.aimLow) this.body.setVelocityX(this.facing * 120);
+        }
+        break;
+      }
+      case 'jumpWind': {
+        this.body.setVelocityX(0);
+        if (this.stateT >= 0.4) {
+          // jump just high enough for the strike band to meet the player's middle
+          const hb = player.hurtbox();
           const [top, bottom] = d.attackBand.map((v) => v * FIG);
-          this.host.zombieStrike(this, {
-            left: Math.min(this.x, reachFar),
-            right: Math.max(this.x, reachFar),
-            top: this.footY - top,
-            bottom: this.footY - bottom + (lowAttack ? 4 : 0),
-          });
-          if (lowAttack) this.body.setVelocityX(this.facing * 120);
+          const rise = Math.max(40, this.footY - (hb.top + hb.bottom) / 2 - (top + bottom) / 2);
+          const g = this.body.gravity.y + (this.body.world?.gravity.y ?? 2000);
+          this.body.setVelocity(Phaser.Math.Clamp(dx * 1.5, -260, 260), -Math.sqrt(2 * g * rise));
+          this.jumped = true;
+          this.setState('jumpUp');
+        }
+        break;
+      }
+      case 'jumpUp': {
+        // strike at the top of the jump
+        if (this.body.velocity.y >= -30 || this.stateT > 0.8) {
+          this.setState('strike');
+          this.strike(false);
         }
         break;
       }
@@ -287,8 +348,17 @@ export class Zombie {
         break;
       }
       case 'recover': {
+        if (this.jumped && !this.body.blocked.down) {
+          // still falling back down from a jump attack
+          this.stateT = 0;
+          break;
+        }
         this.body.setVelocityX(0);
-        if (this.stateT >= 0.55) this.setState('walk');
+        if (this.stateT >= (this.jumped ? 0.8 : 0.55)) {
+          this.jumped = false;
+          this.aimLow = false;
+          this.setState('walk');
+        }
         break;
       }
       case 'hurt': {
@@ -342,14 +412,18 @@ export class Zombie {
       }
       case 'windup': {
         const t = ease.out(Math.min(1, (this.stateT * 1000) / d.windupMs));
-        const target = lowAttack ? Z_WINDUP_LOW : Z_WINDUP_HIGH;
+        const target = lowAttack || this.aimLow ? Z_WINDUP_LOW : Z_WINDUP_HIGH;
         // shiver a little right before striking
         const shake = t > 0.7 ? Math.sin(this.time * 70) * 0.05 : 0;
         const p = lerpPose(this.cur, target, t * 0.5 + 0.1);
         return { ...p, lean: p.lean + shake };
       }
       case 'strike':
-        return smooth(lowAttack ? Z_STRIKE_LOW : Z_STRIKE_HIGH, 40);
+        return smooth(lowAttack || this.aimLow ? Z_STRIKE_LOW : Z_STRIKE_HIGH, 40);
+      case 'jumpWind':
+        return smooth(pose({ ...Z_WINDUP_LOW, fUpper: 2.6, fFore: 2.9, bUpper: 2.4, bFore: 2.7 }), 14);
+      case 'jumpUp':
+        return smooth(Z_WINDUP_HIGH, 18);
       case 'recover':
         return smooth(Z_WALK_BASE, 6);
       case 'hurt':
@@ -402,7 +476,7 @@ export class Zombie {
       g.fillPoints(pts as unknown as Phaser.Math.Vector2[], true);
       g.strokePoints(pts as unknown as Phaser.Math.Vector2[], true);
     }
-    if (this.state === 'windup' && this.stateT > 0.08) {
+    if (this.state === 'windup' && this.stateT > 0.08 && !this.aimLow) {
       // Teach the player what to do: arrow above the head (↓ = duck, ↑ = jump).
       const hx = this.lastPoints.head.x;
       const hy = this.lastPoints.head.y - BONES.headR * this.scale - 18;

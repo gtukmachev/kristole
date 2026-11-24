@@ -807,6 +807,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         if (!z.hittable || sp.hit.has(z) || !overlap(box, z.hurtbox())) continue;
         sp.hit.add(z); // pierces: keeps flying through
         const dmg = Math.round(45 * (this.player.fx.sword ? 1.6 : 1));
+        if (this.fromLedge(z)) z.anger();
         this.hitZombie(z, dmg, sp.kind, sp.dir, 220, box.top, false, true);
       }
       if (sp.dead) sp.destroy();
@@ -1062,11 +1063,17 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       hitOnce.add(z);
       const dir = fx.berserk ? Math.sign(z.x - player.x) || player.facing : player.facing;
       const dmg = Math.round(w.damage * (kind === 'high' ? 1.3 : 1) * mul);
+      if (this.fromLedge(z)) z.anger();
       this.hitZombie(z, dmg, kind, dir, w.knockback * (kind === 'high' ? 1.25 : 1) * knock, box.top, !fx.berserk, w.id === 'axe');
     }
   }
 
   /** Shared by swings, spears and the angel. `heavyFx` = full hit-stop and shake (not for rapid hits). */
+  /** The player is standing on a ledge above this zombie. */
+  private fromLedge(z: Zombie) {
+    return this.player.onGround && z.footY - this.player.footY > 20;
+  }
+
   private hitZombie(z: Zombie, dmg: number, kind: SwingKind, dir: number, knockback: number, minY: number, heavyFx: boolean, heavySound: boolean) {
     const killed = z.takeHit(dmg, kind, dir, knockback);
     if (this.player.fx.freeze && !killed) z.freeze(1.5);
