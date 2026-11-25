@@ -90,12 +90,14 @@ check(!(await S()).blocking, 'block released');
 
 // swing buttons
 await sleep(400);
+await pg.evaluate(() => window.__scene.touch.flash.clear());
 await tap(1188, 450);
-check(await waitFor(pg, () => !!window.__scene.player.attack, null, 400), 'swing-up button swings');
+check(await pg.evaluate(() => [...window.__scene.touch.flash.keys()].join() === 'high'), 'swing-up button pressed');
 await waitFor(pg, () => !window.__scene.player.attack, null, 1500);
 await sleep(300); // swing cooldown
+await pg.evaluate(() => window.__scene.touch.flash.clear());
 await tap(1188, 615);
-check(await waitFor(pg, () => !!window.__scene.player.attack, null, 400), 'swing-down button swings');
+check(await pg.evaluate(() => [...window.__scene.touch.flash.keys()].join() === 'low'), 'swing-down button pressed');
 await sleep(600);
 
 // a thumb on the black bar to the right of the picture still hits the swing zone
