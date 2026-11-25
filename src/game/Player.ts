@@ -170,6 +170,8 @@ export class Player {
   private invulnUntil = 0;
   private lockUntil = 0;
   private lastGroundAt = 0;
+  /** When the last jump from the ground started: a second "up" right after it is a flip, not another jump. */
+  private lastJumpAt = -9;
   private jumpBufferedAt = -1;
   private deadT = 0;
   private trailPts: { x: number; y: number; hx: number; hy: number; t: number }[] = [];
@@ -384,7 +386,11 @@ export class Player {
     if (wantsJump && !hurt && !ghost) {
       const touchingLeft = this.body.blocked.left || this.body.left <= ARENA_LEFT + 2;
       const touchingRight = this.body.blocked.right || this.body.right >= ARENA_RIGHT - 2;
-      if (onGround || this.time - this.lastGroundAt < 0.09) {
+      // Two quick "up"s = a flip, whatever the phase: a second press in the first moment after take-off
+      // (the body may still touch the ground) goes to the flip below instead of being eaten as a new jump.
+      const justJumped = this.time - this.lastJumpAt < 0.2;
+      if ((onGround || this.time - this.lastGroundAt < 0.09) && !justJumped) {
+        this.lastJumpAt = this.time;
         this.body.setVelocityY(-JUMP_V);
         this.jumpBufferedAt = -1;
         this.lastGroundAt = -1;

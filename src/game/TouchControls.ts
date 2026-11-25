@@ -13,13 +13,17 @@ import { handsSwapped } from './touch';
  * at the sides of the game picture.
  */
 
-const STICK_R = 78; // how far the knob travels
+const STICK_R = 60; // how far the knob travels (smaller = less thumb waving)
 const BTN_R = 64;
 /** Fight side zones (on the right; mirrored when the hands are swapped): x of the swing strip, y between up and down. */
 const SWING_X = 1095;
 const SWING_SPLIT_Y = 532;
-/** Ease the thumb off this much (from the highest point) and push again = the second jump: flip / wall bounce. */
-const REARM = STICK_R * 0.35;
+/**
+ * Second jump (flip, wall bounce) = a tiny "down a bit, up again" of the thumb, anywhere up there:
+ * back REARM from the highest point, then up FLICK from the lowest point after that (~3 mm on a big iPad).
+ */
+const REARM = STICK_R * 0.15;
+const FLICK = STICK_R * 0.2;
 /** The stick when nobody touches it: where to look for it. */
 const STICK_HOME = { x: 190, y: 585 };
 const BUTTONS = [
@@ -58,8 +62,10 @@ export class TouchControls {
   private swings: ButtonId[] = [];
   /** Jump edge from the stick: armed -> fires -> eases off a bit -> armed again. */
   private armed = true;
+  /** Highest thumb point since the last jump (most negative dy). */
   private peakDy = 0;
-  private rearmDy = 0;
+  /** Lowest thumb point since re-arming (null = from rest: first jump). */
+  private troughDy: number | null = null;
   private flash = new Map<ButtonId, number>();
   private off: () => void;
 
@@ -93,7 +99,7 @@ export class TouchControls {
     this.held.clear();
     this.swings = [];
     this.armed = true;
-    this.rearmDy = 0;
+    this.troughDy = null;
   }
 
   /** Mirror x when the hands are swapped. */
@@ -199,25 +205,31 @@ export class TouchControls {
       st.left = dx < -STICK_R * 0.3;
       st.right = dx > STICK_R * 0.3;
       // up / down only when the thumb clearly goes that way (running with a wobbly thumb doesn't jump)
-      st.up = dy < -STICK_R * 0.5 && -dy > Math.abs(dx) * 0.6;
+      st.up = dy < -STICK_R * 0.45 && -dy > Math.abs(dx) * 0.5;
       st.down = dy > STICK_R * 0.5 && dy > Math.abs(dx) * 0.8;
-      // jump: push up. Second jump (flip in the air, wall bounce): ease off a little and push again.
+      // jump: push up. Second jump (flip in the air, wall bounce): a tiny ease-off and push again.
       if (this.armed) {
-        if (st.up && dy < Math.min(-STICK_R * 0.5, this.rearmDy - REARM * 0.7)) {
+        const fire =
+          this.troughDy === null
+            ? st.up // from rest: clearly up
+            : dy < this.troughDy - FLICK && dy < -STICK_R * 0.25; // again: a small flick, still in the upper part
+        if (fire) {
           st.jumpPressed = true;
           this.armed = false;
           this.peakDy = dy;
-        }
+        } else if (this.troughDy !== null) this.troughDy = Math.max(this.troughDy, dy);
       } else {
         this.peakDy = Math.min(this.peakDy, dy);
         if (dy > this.peakDy + REARM) {
           this.armed = true;
-          this.rearmDy = dy;
+          this.troughDy = dy;
         }
       }
+      // back near the middle: the next push is a first jump again
+      if (dy > -STICK_R * 0.3 && this.armed) this.troughDy = null;
     } else {
       this.armed = true;
-      this.rearmDy = 0;
+      this.troughDy = null;
     }
     for (const b of this.swings.splice(0)) {
       if (b === 'high') st.swingHigh = true;
@@ -236,9 +248,9 @@ export class TouchControls {
     const bx = s ? Phaser.Math.Clamp(s.bx, STICK_R, WIDTH - STICK_R) : this.mx(STICK_HOME.x);
     const by = s ? Phaser.Math.Clamp(s.by, 140 + STICK_R, HEIGHT - 20) : STICK_HOME.y;
     g.fillStyle(PAPER, s ? 0.35 : 0.2);
-    g.fillCircle(bx, by, STICK_R + 22);
+    g.fillCircle(bx, by, STICK_R + 18);
     g.lineStyle(4, INK, s ? 0.45 : 0.22);
-    g.strokeCircle(bx, by, STICK_R + 22);
+    g.strokeCircle(bx, by, STICK_R + 18);
     let kx = bx;
     let ky = by;
     if (s) {
@@ -249,7 +261,7 @@ export class TouchControls {
       ky += dy * d;
     }
     g.fillStyle(INK, s ? 0.5 : 0.22);
-    g.fillCircle(kx, ky, 34);
+    g.fillCircle(kx, ky, 28);
     // the buttons
     const heldIds = new Set(this.held.values());
     for (const b of BUTTONS) {
