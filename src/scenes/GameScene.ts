@@ -64,6 +64,9 @@ const SPOT_SIZE: Partial<Record<SpotKind, [number, number]>> = {
 
 const overlap = (a: Rect, b: Rect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
+/** Long sword perk: knockback multiplier (pushes a zombie out of its reach). */
+const LONG_SHOVE = 6;
+
 export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private chapter = 0;
   private levelIdx = 0;
@@ -1059,15 +1062,16 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     for (const pk of this.pickups) if (overlap(box, this.pickupBox(pk))) this.collectPerk(pk);
     // perk multipliers
     const mul = (fx.sword ? 1.6 : 1) * (fx.long ? 1.3 : 1) * (fx.ghost ? 2 : 1) * (fx.berserk ? 0.7 : 1);
-    const knock = fx.long ? 2 : 1;
+    // long sword: a real shove — the zombie flies back out of its own reach (heavy ones half as far)
+    const knock = fx.long ? LONG_SHOVE : 1;
     for (const z of this.zombies) {
       if (!z.hittable || hitOnce.has(z)) continue;
       if (!overlap(box, z.hurtbox())) continue;
       hitOnce.add(z);
-      const dir = fx.berserk ? Math.sign(z.x - player.x) || player.facing : player.facing;
+      const dir = fx.berserk || player.flipping ? Math.sign(z.x - player.x) || player.facing : player.facing;
       const dmg = Math.round(w.damage * (kind === 'high' ? 1.3 : 1) * mul);
       if (this.fromLedge(z)) z.anger();
-      this.hitZombie(z, dmg, kind, dir, w.knockback * (kind === 'high' ? 1.25 : 1) * knock, box.top, !fx.berserk, w.id === 'axe');
+      this.hitZombie(z, dmg, kind, dir, w.knockback * (kind === 'high' ? 1.25 : 1) * knock, box.top, !fx.berserk, w.id === 'axe', fx.long);
     }
   }
 
@@ -1077,8 +1081,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   /** Shared by swings, spears and the angel. `heavyFx` = full hit-stop and shake (not for rapid hits). */
-  private hitZombie(z: Zombie, dmg: number, kind: SwingKind, dir: number, knockback: number, minY: number, heavyFx: boolean, heavySound: boolean) {
-    const killed = z.takeHit(dmg, kind, dir, knockback);
+  private hitZombie(z: Zombie, dmg: number, kind: SwingKind, dir: number, knockback: number, minY: number, heavyFx: boolean, heavySound: boolean, shove = false) {
+    const killed = z.takeHit(dmg, kind, dir, knockback, shove);
     if (this.player.fx.freeze && !killed) z.freeze(1.5);
     const hb = z.hurtbox();
     const hy = kind === 'high' ? hb.top + (hb.bottom - hb.top) * 0.25 : hb.top + (hb.bottom - hb.top) * 0.6;

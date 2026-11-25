@@ -167,7 +167,8 @@ export class Zombie {
   }
 
   /** Returns true if this hit killed it. */
-  takeHit(dmg: number, kind: SwingKind, dirX: number, knockback: number): boolean {
+  /** `shove` (long sword): always staggers and flies back, even the heavy ones and during poise. */
+  takeHit(dmg: number, kind: SwingKind, dirX: number, knockback: number, shove = false): boolean {
     if (!this.alive) return false;
     this.hp -= dmg;
     this.flashUntil = this.time + 0.12;
@@ -181,7 +182,7 @@ export class Zombie {
       return true;
     }
     // After a stagger a zombie keeps pushing forward for a moment (poise), so spamming one button isn't enough.
-    const staggers = (!this.def.heavy || kind === 'high') && this.time >= this.poiseUntil;
+    const staggers = shove || ((!this.def.heavy || kind === 'high') && this.time >= this.poiseUntil);
     if (staggers && this.state !== 'rising' && this.state !== 'falling') {
       this.setState('hurt');
       this.aimLow = false;

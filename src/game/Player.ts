@@ -147,6 +147,8 @@ export class Player {
     lunge: boolean;
     /** A spear throw: just a pose, the spear does the hitting. */
     throw?: boolean;
+    /** Swung during a flip: the blade spins round with the body and hits on both sides. */
+    spin?: boolean;
   } | null = null;
   fx: PlayerPerks = { ...NO_PERKS };
   private berserkT = 0;
@@ -220,6 +222,13 @@ export class Player {
     const r = this.weapon.range * FIG * this.reachMul * 1.05;
     const f = this.footY;
     return { left: this.x - r, right: this.x + r, top: f - 140 * FIG * this.sizeMul, bottom: f + 6 };
+  }
+
+  /** Swing during a flip: the blade turns a full circle, so it hits all around the body. */
+  spinBox(): Rect {
+    const r = this.weapon.range * FIG * this.reachMul;
+    const cy = this.footY - 55 * FIG * this.sizeMul;
+    return { left: this.x - r, right: this.x + r, top: cy - r, bottom: cy + r };
   }
 
   swingBox(kind: SwingKind, crouched: boolean, ctx: AttackCtx = crouched ? 'crouch' : 'stand'): Rect {
@@ -416,7 +425,7 @@ export class Player {
       }
     }
     // Spear: W / S throw a spear instead of swinging.
-    if (this.fx.spear && !this.fx.berserk && !this.attack && !hurt && !this.flipping && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
+    if (this.fx.spear && !this.fx.berserk && !this.attack && !hurt && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
       const kind: SwingKind = input.swingHigh ? 'high' : 'low';
       const hb = this.hurtbox();
       const y = kind === 'high' ? hb.top + (hb.bottom - hb.top) * 0.2 : hb.top + (hb.bottom - hb.top) * 0.62;
@@ -426,7 +435,7 @@ export class Player {
       input = { ...input, swingHigh: false, swingLow: false };
     }
     // Attacks.
-    if (!this.attack && !hurt && !this.flipping && !this.fx.berserk && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
+    if (!this.attack && !hurt && !this.fx.berserk && this.time >= this.nextAttackAt && (input.swingHigh || input.swingLow)) {
       const kind: SwingKind = input.swingHigh ? 'high' : 'low';
       const ctx: AttackCtx = !onGround ? 'air' : this.crouching ? 'crouch' : 'stand';
       let lunge = false;
@@ -435,11 +444,11 @@ export class Player {
         const reach = this.weapon.range * FIG * this.reachMul;
         lunge = d !== null && d > reach - 12 && d < reach + 80;
       }
-      this.attack = { kind, ctx, variant: Math.floor(Math.random() * 3), t: 0, hit: new Set(), swung: false, lunge };
+      this.attack = { kind, ctx, variant: Math.floor(Math.random() * 3), t: 0, hit: new Set(), swung: false, lunge, spin: this.flipping };
       this.blocking = false;
       this.nextAttackAt = this.time + this.weapon.swingMs / 1000 + 0.04;
       this.trailPts = [];
-      if (ctx === 'air' && kind === 'low' && !ghost) this.body.setVelocityY(Math.max(this.body.velocity.y, 0) + 380);
+      if (ctx === 'air' && kind === 'low' && !ghost && !this.flipping) this.body.setVelocityY(Math.max(this.body.velocity.y, 0) + 380);
     }
     if (this.attack) {
       const a = this.attack;
@@ -449,7 +458,7 @@ export class Player {
         sfx.swing(this.weapon.id === 'axe');
       }
       if (!a.throw && a.t >= this.weapon.activeFrom && a.t <= this.weapon.activeTo) {
-        this.host.playerSwing(this, a.kind, this.swingBox(a.kind, a.ctx === 'crouch', a.ctx), a.hit);
+        this.host.playerSwing(this, a.kind, a.spin ? this.spinBox() : this.swingBox(a.kind, a.ctx === 'crouch', a.ctx), a.hit);
       }
       if (a.t >= 1) this.attack = null;
     }
@@ -476,6 +485,8 @@ export class Player {
       else if (a.t < this.weapon.activeTo) p = lerpPose(A, B, ease.out((a.t - w) / (this.weapon.activeTo - w)));
       else p = B;
       if (!onGround && a.ctx !== 'air') p = { ...p, fThigh: P_JUMP.fThigh, fShin: P_JUMP.fShin, bThigh: P_JUMP.bThigh, bShin: P_JUMP.bShin };
+      // swinging in a flip: the body (and the blade) keeps turning, legs stay tucked
+      if (this.flipping) p = { ...p, fThigh: P_TUCK.fThigh, fShin: P_TUCK.fShin, bThigh: P_TUCK.bThigh, bShin: P_TUCK.bShin, rot: Math.min(1, this.flipT / FLIP_TIME) * TAU };
       this.cur = p;
     } else {
       let target: Pose;
