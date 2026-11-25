@@ -9,6 +9,7 @@ import { sfx } from '../game/sfx';
 import { drawFigure, pose } from '../game/figure';
 import { bake } from '../game/background';
 import { isDebug, setMenuKind } from '../game/menuChoice';
+import { startChapter } from '../game/startChapter';
 
 type Seg = [number, number, number, number];
 
@@ -131,13 +132,15 @@ export class MenuScene extends Phaser.Scene {
     }));
     drawLogo(this, WIDTH / 2, 38, 0.66);
 
-    const bw = 300, bh = 108, gap = 28;
+    const bw = 270, bh = 108, gap = 24;
     const row1y = 255, row2y = 392;
     const x0 = WIDTH / 2 - bw - gap;
-    const play = makeButton(this, { x: x0, y: row1y, w: bw, h: bh, label: 'Play', onClick: () => this.play() });
-    const avatar = makeButton(this, { x: WIDTH / 2, y: row1y, w: bw, h: bh, label: 'Avatar', onClick: () => this.scene.start('Avatar') });
+    const c4 = (i: number) => WIDTH / 2 + (i - 1.5) * (bw + gap);
+    const play = makeButton(this, { x: c4(0), y: row1y, w: bw, h: bh, label: 'Play', onClick: () => this.play() });
+    const avatar = makeButton(this, { x: c4(1), y: row1y, w: bw, h: bh, label: 'Avatar', onClick: () => this.scene.start('Avatar') });
+    const weapon = makeButton(this, { x: c4(2), y: row1y, w: bw, h: bh, label: 'Weapon', onClick: () => this.scene.start('Weapon', { chapter: this.chapter, from: 'menu' }) });
     const board = makeButton(this, {
-      x: WIDTH / 2 + bw + gap, y: row1y, w: bw, h: bh, label: 'Leader\nboard', fontSize: 40,
+      x: c4(3), y: row1y, w: bw, h: bh, label: 'Leader\nboard', fontSize: 40,
       onClick: () => this.scene.start('Leaderboard'),
     });
     const soon = () => this.showToast('Coming soon!');
@@ -177,7 +180,7 @@ export class MenuScene extends Phaser.Scene {
       left: () => this.changeChapter(-1),
       right: () => this.changeChapter(1),
     };
-    new GridNav(this, [[buttonItem(play), buttonItem(avatar), buttonItem(board)], [buttonItem(events), buttonItem(perks), buttonItem(rewards)], [chapterItem]]);
+    new GridNav(this, [[buttonItem(play), buttonItem(avatar), buttonItem(weapon), buttonItem(board)], [buttonItem(events), buttonItem(perks), buttonItem(rewards)], [chapterItem]]);
     this.input.keyboard!.on('keydown-M', () => sfx.toggleMute());
     if (isDebug()) {
       const t = this.add.text(WIDTH - 12, 12, '⇄ map menu', {
@@ -248,6 +251,6 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
     sfx.click();
-    this.scene.start('Weapon', { chapter: this.chapter });
+    startChapter(this, this.chapter);
   }
 }

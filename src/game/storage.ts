@@ -42,6 +42,8 @@ export interface PlayerSave {
   at: Spot | null;
   /** Per chapter: the level to resume from after a death or a break (none = from the start). */
   resume?: Record<number, number>;
+  /** The weapon the player picked (none yet = ask before the first fight). */
+  weapon?: WeaponId | null;
 }
 
 // v1..v6 keys (localStorage), migrated once.
@@ -62,7 +64,7 @@ export function cleanName(name: string) {
 export const nameKey = (name: string) => cleanName(name).toLowerCase();
 
 const newPlayer = (name: string, headgear: Headgear = 'headband'): PlayerSave => ({
-  key: nameKey(name), name: cleanName(name), headgear, unlockedChapter: 0, at: null,
+  key: nameKey(name), name: cleanName(name), headgear, unlockedChapter: 0, at: null, weapon: null,
 });
 
 function readOld<T>(key: string): T | null {
@@ -129,6 +131,7 @@ function mergePlayer(older: PlayerSave | undefined, newer: PlayerSave): PlayerSa
     ...newer,
     unlockedChapter: Math.max(older.unlockedChapter, newer.unlockedChapter),
     resume: { ...(older.resume ?? {}), ...(newer.resume ?? {}) },
+    weapon: newer.weapon ?? older.weapon ?? null,
   };
 }
 
@@ -310,6 +313,18 @@ export const storage = {
       p.unlockedChapter = idx;
       putPlayer(p);
     }
+  },
+
+  /** The player's weapon, or null if he hasn't picked one yet. */
+  getWeapon(): WeaponId | null {
+    const w = current().weapon;
+    return w === 'sword' || w === 'axe' ? w : null;
+  },
+  setWeapon(id: WeaponId) {
+    const p = current();
+    if (p.weapon === id) return;
+    p.weapon = id;
+    putPlayer(p);
   },
 
   /** Where the hero was last: the map puts him there, a death resumes from that level. */

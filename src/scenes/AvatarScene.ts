@@ -128,7 +128,7 @@ export class AvatarScene extends Phaser.Scene {
     const b = Math.sin(this.t * 3) * 0.04;
     drawFigure(g, 300, 520, 1, 2.4, { ...PREVIEW_POSE, lean: PREVIEW_POSE.lean + b, weapon: PREVIEW_POSE.weapon + b * 2 }, {
       kind: 'player',
-      weapon: 'sword',
+      weapon: storage.getWeapon() ?? 'sword',
       headgear: this.profile.headgear,
       time: this.t,
     });

@@ -8,17 +8,18 @@ import { storage, type WeaponId } from '../game/storage';
 import { GridNav } from '../game/ui';
 import { menuBackdrop } from './MenuScene';
 
-const LAST_WEAPON_KEY = 'kristole.weapon';
-
 export class WeaponScene extends Phaser.Scene {
   private chapter = 0;
+  /** Opened from the menu ("Weapon"): pick and go back. Otherwise: pick and fight. */
+  private fromMenu = false;
 
   constructor() {
     super('Weapon');
   }
 
-  init(data: { chapter: number }) {
+  init(data: { chapter?: number; from?: 'menu' }) {
     this.chapter = data.chapter ?? 0;
+    this.fromMenu = data.from === 'menu';
   }
 
   create() {
@@ -26,15 +27,12 @@ export class WeaponScene extends Phaser.Scene {
     menuBackdrop(this);
     const ch = CHAPTERS[this.chapter];
     this.add.text(WIDTH / 2, 60, 'CHOOSE FROM 2 WEAPONS', { fontFamily: FONT_IMPACT, fontSize: '60px', color: hex(MENU_ORANGE) }).setOrigin(0.5);
-    this.add.text(WIDTH / 2, 112, `${ch.title} — ${ch.name}`, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '24px', color: hex(MENU_PALE) }).setOrigin(0.5);
+    const sub = this.fromMenu ? 'Your weapon for every fight' : `${ch.title} — ${ch.name}`;
+    this.add.text(WIDTH / 2, 112, sub, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '24px', color: hex(MENU_PALE) }).setOrigin(0.5);
 
     const ids: WeaponId[] = ['sword', 'axe'];
-    let last: WeaponId = 'sword';
-    try {
-      if (window.localStorage.getItem(LAST_WEAPON_KEY) === 'axe') last = 'axe';
-    } catch {
-      /* ignore */
-    }
+    const mine = storage.getWeapon();
+    const last: WeaponId = mine ?? 'sword';
 
     const cards = ids.map((id, i) => {
       const w = WEAPONS[id];
@@ -43,6 +41,7 @@ export class WeaponScene extends Phaser.Scene {
       const frame = this.add.graphics();
       const g = this.add.graphics();
       drawWeapon(g, id, { x: cx - 70, y: cy + 40 }, { x: 0.55, y: -0.83 }, 2.3, 1, MENU_WHITE, 0x000000);
+      if (id === mine) this.add.text(cx, cy - 170, '✓ YOUR WEAPON', { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '18px', color: hex(MENU_TEAL) }).setOrigin(0.5);
       const name = this.add.text(cx, cy + 100, w.name, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '44px', color: hex(MENU_YELLOW) }).setOrigin(0.5);
       this.add.text(cx, cy + 150, w.blurb, { fontFamily: FONT_SLAB, fontSize: '20px', color: hex(MENU_WHITE), align: 'center' }).setOrigin(0.5, 0);
       // stat bars
@@ -66,18 +65,15 @@ export class WeaponScene extends Phaser.Scene {
       };
       const choose = () => {
         sfx.click();
-        try {
-          window.localStorage.setItem(LAST_WEAPON_KEY, id);
-        } catch {
-          /* ignore */
-        }
-        this.scene.start('Game', { chapter: this.chapter, level: -1, weapon: id, resumeLevel: storage.resumeLevel(this.chapter) });
+        storage.setWeapon(id);
+        if (this.fromMenu) this.scene.start(menuScene(), { chapter: this.chapter });
+        else this.scene.start('Game', { chapter: this.chapter, level: -1, weapon: id, resumeLevel: storage.resumeLevel(this.chapter) });
       };
       return { focus, activate: choose, zone };
     });
     cards.forEach((c) => c.zone.on('pointerup', () => c.activate()));
     const nav = new GridNav(this, [cards.map((c) => ({ focus: c.focus, activate: c.activate, target: c.zone }))], () => this.scene.start(menuScene(), { chapter: this.chapter }));
     nav.set(0, ids.indexOf(last));
-    this.add.text(WIDTH / 2, HEIGHT - 30, '← →  choose     Enter  fight!     Esc  back', { fontFamily: FONT_SLAB, fontSize: '18px', color: '#888888' }).setOrigin(0.5);
+    this.add.text(WIDTH / 2, HEIGHT - 30, `← →  choose     Enter  ${this.fromMenu ? 'take it' : 'fight!'}     Esc  back`, { fontFamily: FONT_SLAB, fontSize: '18px', color: '#888888' }).setOrigin(0.5);
   }
 }

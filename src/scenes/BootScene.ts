@@ -84,13 +84,7 @@ export class BootScene extends Phaser.Scene {
     if (deep) {
       const ch = Phaser.Math.Clamp(Number(deep[1]) - 1, 0, CHAPTERS.length - 1);
       const lv = Phaser.Math.Clamp(Number(deep[2]) - 1, -1, CHAPTERS[ch].levels - 1);
-      let w: 'sword' | 'axe' = 'sword';
-      try {
-        if (window.localStorage.getItem('kristole.weapon') === 'axe') w = 'axe';
-      } catch {
-        /* ignore */
-      }
-      this.scene.start('Game', { chapter: ch, level: lv, weapon: w });
+      this.scene.start('Game', { chapter: ch, level: lv, weapon: storage.getWeapon() ?? 'sword' });
       return;
     }
     const target = p.get('scene');
@@ -100,7 +94,7 @@ export class BootScene extends Phaser.Scene {
     // &perks=1111111111 – perk counts per slot (1..0), for testing
     const perks = p.get('perks')?.padEnd(10, '0').slice(0, 10).split('').map(Number);
     if (target === 'game') this.scene.start('Game', { chapter, level, weapon, fromPlace: p.get('from') ?? undefined, perks });
-    else if (target === 'weapon') this.scene.start('Weapon', { chapter });
+    else if (target === 'weapon') this.scene.start('Weapon', { chapter, from: p.get('from') === 'menu' ? 'menu' : undefined });
     else if (target === 'avatar') this.scene.start('Avatar');
     else if (target === 'classic') this.scene.start('Menu');
     else if (target === 'map') this.scene.start('MapMenu');

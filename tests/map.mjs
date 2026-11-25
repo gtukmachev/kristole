@@ -54,11 +54,14 @@ try {
     await clickWorld(pg, 1100, 354); // chapter 4: locked
     await sleep(300);
     ok(await active(pg, 'MapMenu'), 'locked chapter does not start');
-    await clickWorld(pg, 500, 588); // chapter 2: hero runs there, then the game starts
-    await sleep(200);
-    ok((await map(pg)).pos !== 2 || (await active(pg, 'Weapon')), 'hero runs to the clicked chapter');
-    ok(await waitFor(pg, () => window.__kristole.scene.isActive('Weapon')), 'arrival starts the chapter (weapon choice)');
+    await clickWorld(pg, 500, 588); // chapter 2: first click — the hero only runs there
+    ok(await waitFor(pg, () => window.__kristole.scene.getScene('MapMenu').heroPos === 1), 'first click: hero runs to the clicked chapter');
+    await sleep(600);
+    ok(await active(pg, 'MapMenu'), 'first click does not start the chapter');
+    await clickWorld(pg, 500, 588); // second click starts it
+    ok(await waitFor(pg, () => window.__kristole.scene.isActive('Weapon')), 'second click starts it: no weapon yet -> weapon choice');
     ok((await pg.evaluate(() => window.__kristole.scene.getScene('Weapon').chapter)) === 1, 'the clicked chapter is the one started');
+    ok((await pg.evaluate(() => window.__storage.getWeapon())) === null, 'a new player has no weapon');
     await ctx.close();
   }
 
@@ -84,6 +87,30 @@ try {
     await pg.evaluate(() => window.__kristole.scene.getScene('Game').goNext());
     ok(await waitFor(pg, () => window.__kristole.scene.getScene('Game').levelIdx === 3), 'after the camp: the level where he died');
     ok(JSON.stringify(await pg.evaluate(() => window.__storage.getSpot())) === '{"chapter":1,"level":3}', 'spot saved at level start');
+
+    // the weapon picked before the fight is the player's weapon now
+    ok((await pg.evaluate(() => window.__storage.getWeapon())) === 'sword', 'picked weapon saved in the profile');
+    await sleep(300);
+    await pg.goto(base);
+    await waitFor(pg, () => window.__kristole?.scene.isActive('MapMenu'));
+    await pg.keyboard.press('Enter');
+    ok(await waitFor(pg, () => window.__kristole.scene.isActive('Game')), 'with a weapon: Play goes straight to the game');
+    ok(!(await active(pg, 'Weapon')), 'no weapon screen');
+    // the "Weapon" menu item: pick the axe, back to the menu
+    await pg.goto(base);
+    await waitFor(pg, () => window.__kristole?.scene.isActive('MapMenu'));
+    await pg.mouse.click(await pg.evaluate(() => window.__kristole.scene.getScene('MapMenu').children.list.find((o) => o.text === 'Weapon').x), 125);
+    ok(await waitFor(pg, () => window.__kristole.scene.isActive('Weapon')), '"Weapon" menu item opens the weapon choice');
+    await pg.keyboard.press('ArrowRight');
+    await pg.keyboard.press('Enter');
+    ok(await waitFor(pg, () => window.__kristole.scene.isActive('MapMenu')), 'after picking: back to the menu');
+    ok((await pg.evaluate(() => window.__storage.getWeapon())) === 'axe', 'axe saved');
+    // double click on another chapter: the hero runs there and it starts
+    await clickWorld(pg, 200, 470 + Math.sin(0.4) * 120);
+    await sleep(80);
+    await clickWorld(pg, 200, 470 + Math.sin(0.4) * 120);
+    ok(await waitFor(pg, () => window.__kristole.scene.isActive('Game')), 'double click: run there and start');
+    ok((await pg.evaluate(() => { const g = window.__kristole.scene.getScene('Game'); return g.chapter === 0 && g.weaponId === 'axe'; })), 'chapter 1 with the axe');
     await ctx.close();
   }
 

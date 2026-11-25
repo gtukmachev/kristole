@@ -20,6 +20,7 @@ import {
 } from '../game/mapArt';
 import { drawLogo } from './MenuScene';
 import { isDebug, setMenuKind } from '../game/menuChoice';
+import { startChapter } from '../game/startChapter';
 
 const TAU = Math.PI * 2;
 const HEADER_H = 172;
@@ -542,12 +543,13 @@ export class MapMenuScene extends Phaser.Scene {
     const defs: { label: string; off?: boolean; act: () => void }[] = [
       { label: 'Play', act: () => this.go(this.heroTarget) },
       { label: 'Avatar', act: () => this.scene.start('Avatar') },
+      { label: 'Weapon', act: () => this.scene.start('Weapon', { chapter: this.heroTarget, from: 'menu' }) },
       { label: 'Leaderboard', act: () => this.scene.start('Leaderboard') },
       { label: 'Perks', act: () => this.scene.start('Perks', { from: 'menu' }) },
       { label: 'Events', off: true, act: () => this.say('Coming soon!') },
       { label: 'Rewards', off: true, act: () => this.say('Coming soon!') },
     ];
-    const bw = 158, bh = 42, gap = 16;
+    const bw = 150, bh = 42, gap = 14;
     const x0 = WIDTH / 2 - ((bw + gap) * defs.length - gap) / 2;
     const frame = this.add.graphics().setDepth(11);
     const items: NavItem[] = defs.map((d, i) => {
@@ -559,7 +561,7 @@ export class MapMenuScene extends Phaser.Scene {
         g.fillStyle(ACCENTS[this.heroPos].soft, 1);
         g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
       }
-      this.add.text(x + bw / 2, y + bh / 2, d.label, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '22px', color: d.off ? '#a6a6a0' : hex(INK) }).setOrigin(0.5).setDepth(11);
+      this.add.text(x + bw / 2, y + bh / 2, d.label, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: d.label.length > 8 ? '19px' : '22px', color: d.off ? '#a6a6a0' : hex(INK) }).setOrigin(0.5).setDepth(11);
       const z = this.add.zone(x + bw / 2, y + bh / 2, bw, bh).setInteractive({ useHandCursor: true }).setDepth(12);
       const activate = () => {
         if (d.off) sfx.denied(); else sfx.click();
@@ -676,17 +678,25 @@ export class MapMenuScene extends Phaser.Scene {
       this.say('🔒 Finish the previous chapter to unlock');
       return;
     }
-    this.go(best);
+    // first click: the hero runs there; a click on his chapter (or a double click) starts it
+    if (best === this.heroTarget) this.go(best);
+    else this.moveTo(best);
+  }
+
+  /** The hero runs to a chapter without starting it. */
+  private moveTo(i: number, hint = 'click again to play') {
+    sfx.click();
+    this.heroTarget = i;
+    this.startOnArrive = false;
+    this.act = { kind: 'run', t: 0 };
+    this.say(`${CHAPTERS[i].title}: ${CHAPTERS[i].name} — ${hint}`);
   }
 
   private step(d: number) {
     if (this.starting) return;
     const to = Phaser.Math.Clamp(this.heroTarget + d, 0, this.unlocked);
     if (to === this.heroTarget) return;
-    sfx.click();
-    this.heroTarget = to;
-    this.startOnArrive = false;
-    this.act = { kind: 'run', t: 0 };
+    this.moveTo(to, 'Enter to play');
   }
 
   /** Click on a location / Play: run there, then the game starts. */
@@ -706,7 +716,7 @@ export class MapMenuScene extends Phaser.Scene {
     this.starting = true;
     sfx.click();
     this.say(`▶ ${CHAPTERS[i].title}: ${CHAPTERS[i].name}`);
-    this.time.delayedCall(450, () => this.scene.start('Weapon', { chapter: i }));
+    this.time.delayedCall(450, () => startChapter(this, i));
   }
 
   private nodePoint(pos: number) {
@@ -1359,7 +1369,7 @@ export class MapMenuScene extends Phaser.Scene {
       this.dyn.lineStyle(2.4, TITLE_BROWN, 0.5 + 0.4 * Math.sin(this.t * 5));
       this.dyn.strokeEllipse(pt.x, pt.y, 54, 20);
     }
-    drawFigure(this.dyn, pt.x, pt.y - lift - 2, this.heroFacing, 0.34, p, { kind: 'player', weapon: 'sword', headgear: prof.headgear, time: this.t });
+    drawFigure(this.dyn, pt.x, pt.y - lift - 2, this.heroFacing, 0.34, p, { kind: 'player', weapon: storage.getWeapon() ?? 'sword', headgear: prof.headgear, time: this.t });
     this.dyn.fillStyle(0xf08a1c, 1);
     const ty = pt.y - 112;
     this.dyn.fillTriangle(pt.x - 7, ty - 8, pt.x + 7, ty - 8, pt.x, ty);

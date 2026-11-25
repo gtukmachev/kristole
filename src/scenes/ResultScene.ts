@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { startChapter } from '../game/startChapter';
 import { menuScene } from '../game/menuChoice';
 import { ACC, setAccent, FONT_HAND, FONT_IMPACT, FONT_SLAB, HEIGHT, INK, INK_SOFT, PAPER, WIDTH, hex } from '../game/constants';
 import { CHAPTERS } from '../game/data';
@@ -55,7 +56,7 @@ export class ResultScene extends Phaser.Scene {
     }
 
     const opts: { label: string; act: () => void }[] = [];
-    if (d.win && d.chapter + 1 < CHAPTERS.length) opts.push({ label: 'Next chapter', act: () => this.scene.start('Weapon', { chapter: d.chapter + 1 }) });
+    if (d.win && d.chapter + 1 < CHAPTERS.length) opts.push({ label: 'Next chapter', act: () => startChapter(this, d.chapter + 1) });
     opts.push({ label: d.win ? 'Play again' : 'Try again', act: () => this.scene.start('Game', { chapter: d.chapter, level: -1, weapon: d.weapon, resumeLevel: storage.resumeLevel(d.chapter) }) });
     opts.push({ label: 'Leaderboard', act: () => this.scene.start('Leaderboard', { highlight: rank }) });
     opts.push({ label: 'Main menu', act: () => this.scene.start(menuScene(), { chapter: d.chapter }) });
