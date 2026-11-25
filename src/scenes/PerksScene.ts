@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hint as keyHint } from '../game/touch';
 import { menuScene } from '../game/menuChoice';
 import { ACC, FONT_HAND, FONT_IMPACT, FONT_SLAB, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH, hex } from '../game/constants';
 import { DEMO_H, DEMO_W, drawPerkDemo } from '../game/perkDemo';
@@ -55,7 +56,7 @@ export class PerksScene extends Phaser.Scene {
     bands.fillRect(0, 0, WIDTH, VIEW_TOP - 8);
     bands.fillRect(0, VIEW_TOP + VIEW_H + 6, WIDTH, HEIGHT);
     this.add.text(WIDTH / 2, 44, 'PERKS', { fontFamily: FONT_IMPACT, fontSize: '60px', color: hex(INK) }).setOrigin(0.5).setDepth(11);
-    this.add.text(WIDTH / 2, 92, 'Press 1 … 9, 0 in the game to switch a perk on. Each one is used up and works for a few seconds.', {
+    this.add.text(WIDTH / 2, 92, keyHint('Press 1 … 9, 0 in the game to switch a perk on. Each one is used up and works for a few seconds.', 'In the game, tap a perk at the top of the screen to switch it on. Each one is used up and works for a few seconds.'), {
       fontFamily: FONT_SLAB, fontSize: '18px', color: hex(INK_SOFT),
     }).setOrigin(0.5).setDepth(11);
 
@@ -91,7 +92,7 @@ export class PerksScene extends Phaser.Scene {
       'Get perks: one free pick on level 0 of every chapter  ·  break things that wobble, put out candles, scare birds  ·  big zombies sometimes drop one, giants drop three', {
         fontFamily: FONT_HAND, fontSize: '18px', color: hex(INK), align: 'center', wordWrap: { width: 1180 },
       }).setOrigin(0.5).setDepth(11);
-    const back = this.add.text(WIDTH / 2, HEIGHT - 30, '↑ ↓  choose     Esc  back', { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '22px', color: hex(INK) })
+    const back = this.add.text(WIDTH / 2, HEIGHT - 30, keyHint('↑ ↓  choose     Esc  back', '‹  Back'), { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '22px', color: hex(INK) })
       .setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
     back.on('pointerup', () => this.close());
 

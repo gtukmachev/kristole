@@ -4,6 +4,7 @@
  * Passed chapters: happy people, smoke from chimneys. The others: zombies, broken huts.
  * Everything lives a little: day and night, lights in windows, animals in the groves.
  */
+import { hint as keyHint, isTouch } from '../game/touch';
 import Phaser from 'phaser';
 import {
   ACCENTS, FONT_HAND, FONT_SLAB, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH, hex,
@@ -538,7 +539,14 @@ export class MapMenuScene extends Phaser.Scene {
     const small = { fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '15px', color: '#555555' };
     this.add.text(16, 14, `Hi, ${storage.getProfile().name}!`, { ...small, fontStyle: 'bold', color: hex(TITLE_BROWN) }).setDepth(11);
     this.add.text(16, 36, 'GAME DESIGN BY LEO T.', { ...small, fontSize: '13px' }).setDepth(11);
-    this.add.text(WIDTH - 16, 14, `M — sound  ·  v${__APP_VERSION__}`, { ...small, fontSize: '13px', color: '#888888' }).setOrigin(1, 0).setDepth(11);
+    // M toggles the sound; on a phone the label itself is the button
+    const soundLabel = () => (isTouch() ? `${sfx.muted ? 'sound off' : 'sound on'} (tap)  ·  v${__APP_VERSION__}` : `M — sound  ·  v${__APP_VERSION__}`);
+    const soundT = this.add.text(WIDTH - 16, 14, soundLabel(), { ...small, fontSize: isTouch() ? '18px' : '13px', color: '#888888' }).setOrigin(1, 0).setDepth(11)
+      .setInteractive({ useHandCursor: true });
+    soundT.on('pointerup', () => {
+      sfx.toggleMute();
+      soundT.setText(soundLabel());
+    });
 
     const defs: { label: string; off?: boolean; act: () => void }[] = [
       { label: 'Play', act: () => this.go(this.heroTarget) },
@@ -684,7 +692,7 @@ export class MapMenuScene extends Phaser.Scene {
   }
 
   /** The hero runs to a chapter without starting it. */
-  private moveTo(i: number, hint = 'click again to play') {
+  private moveTo(i: number, hint = keyHint('click again to play', 'tap again to play')) {
     sfx.click();
     this.heroTarget = i;
     this.startOnArrive = false;

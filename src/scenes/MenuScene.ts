@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hint as keyHint } from '../game/touch';
 import {
   FONT_IMPACT, FONT_SLAB, HEIGHT, MENU_BG, MENU_DARKRED, MENU_ORANGE, MENU_PALE, MENU_TEAL, MENU_WHITE, WIDTH, hex,
 } from '../game/constants';
@@ -233,7 +234,7 @@ export class MenuScene extends Phaser.Scene {
     const ch = CHAPTERS[this.chapter];
     this.chapterTitle.setText(ch.title).setAlpha(this.locked ? 0.4 : 1);
     this.chapterName.setText(ch.name).setAlpha(this.locked ? 0.4 : 1);
-    this.lockText.setText(this.locked ? '🔒 Finish the previous chapter to unlock' : this.chapterFocused ? 'Press Enter to play' : '');
+    this.lockText.setText(this.locked ? '🔒 Finish the previous chapter to unlock' : this.chapterFocused ? keyHint('Press Enter to play', 'Tap the chapter to play') : '');
     const g = this.arrows;
     g.clear();
     const cy = 580;

@@ -12,9 +12,11 @@ import { ResultScene } from './scenes/ResultScene';
 import { PerksScene } from './scenes/PerksScene';
 import { installKeyDebug } from './keyDebug';
 import { storage } from './game/storage';
+import { setupMobile } from './game/mobile';
 import { isDebug } from './game/menuChoice';
 
 installKeyDebug();
+setupMobile();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

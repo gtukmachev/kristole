@@ -8,6 +8,8 @@ import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId 
 import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
 import { SECRETS, Secret, autoSecrets } from '../game/secrets';
 import { keyLog } from '../keyDebug';
+import { TouchControls } from '../game/TouchControls';
+import { hint as keyHint, isTouch } from '../game/touch';
 import type { AmbientMode } from '../game/ambient';
 import { drawBackground, groundKey } from '../game/background';
 import { Ambient } from '../game/ambient';
@@ -68,6 +70,9 @@ const overlap = (a: Rect, b: Rect) => a.left < b.right && a.right > b.left && a.
 
 /** Long sword perk: knockback multiplier (pushes a zombie out of its reach). */
 const LONG_SHOVE = 6;
+
+/** Pause button centre (screen space). */
+const PAUSE_BTN = { x: WIDTH - 40, y: 40 };
 
 export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private chapter = 0;
@@ -130,6 +135,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private ash!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Perk slots pressed since the last frame (by physical key, so any layout and the numpad work). */
   private perkPresses: number[] = [];
+  /** Phones and tablets: the stick and the fight buttons. */
+  private touch?: TouchControls;
   // ---- v5: badminton shuttlecocks and the helicopter of the army base
   private shuttles: { g: Phaser.GameObjects.Graphics; x: number; y: number; vx: number; vy: number; dmg: number; dir: number }[] = [];
   private heli?: { g: Phaser.GameObjects.Graphics; x: number; dir: number; t: number };
@@ -268,6 +275,15 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }).setDepth(56);
 
     this.createHud();
+    if (isTouch()) {
+      this.touch = new TouchControls(this, {
+        perkSlot: (i) => this.perkBar.slotPos(i),
+        perkSlots: PERKS.length,
+        onPerk: (i) => this.perkPresses.push(i),
+        onPause: () => this.openPause(),
+        pauseAt: PAUSE_BTN,
+      });
+    }
     for (const d of SECRETS[this.place.id] ?? (this.isCamp || this.chapter < 3 ? [] : autoSecrets(this.place, this.chapter))) {
       this.secrets.push(new Secret(this, d, (x, y) => {
         this.dustAt(x, y, 8);
@@ -275,15 +291,20 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       }));
     }
 
-    // Lose focus (switch tab / window) -> pause, so you don't die while away.
+    // Lose focus (switch tab / window, phone: switch app / lock the screen) -> pause, so you don't die while away.
     const onBlur = () => this.openPause();
     this.game.events.on(Phaser.Core.Events.BLUR, onBlur);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(Phaser.Core.Events.BLUR, onBlur));
+    this.game.events.on(Phaser.Core.Events.HIDDEN, onBlur);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off(Phaser.Core.Events.BLUR, onBlur);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, onBlur);
+    });
 
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       // Don't let keys that were held while paused leak into the game.
       kb.resetKeys();
       this.perkPresses = [];
+      this.touch?.reset();
     });
 
     sfx.playMusic('game');
@@ -311,15 +332,20 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const level = txt(WIDTH / 2, 14, levelName, 22).setOrigin(0.5, 0);
     this.perkBar = new PerkBar(this);
     const wave = txt(WIDTH / 2, 42, '', 20).setOrigin(0.5, 0).setColor(hex(INK_SOFT));
-    const score = txt(WIDTH - 24, 12, '', 34).setOrigin(1, 0);
-    const combo = txt(WIDTH - 24, 52, '', 24).setOrigin(1, 0);
+    const score = txt(PAUSE_BTN.x - 40, 12, '', 34).setOrigin(1, 0);
+    const combo = txt(PAUSE_BTN.x - 40, 52, '', 24).setOrigin(1, 0);
+    this.drawPauseButton();
     const banner = txt(WIDTH / 2, 250, '', 84).setOrigin(0.5).setAlpha(0);
     const sub = txt(WIDTH / 2, 320, '', 30, FONT_HAND).setOrigin(0.5).setAlpha(0);
     const hint = txt(WIDTH / 2, HEIGHT - 42, '', 20, FONT_HAND).setOrigin(0.5).setAlpha(0);
-    const mute = txt(WIDTH - 24, HEIGHT - 34, 'SOUND OFF (M)', 18).setOrigin(1, 0).setVisible(sfx.muted);
+    const mute = (isTouch() ? txt(PAUSE_BTN.x - 40, 84, 'SOUND OFF', 18) : txt(WIDTH - 24, HEIGHT - 34, 'SOUND OFF (M)', 18)).setOrigin(1, 0).setVisible(sfx.muted);
     this.hud = { hp, score, combo, level, wave, banner, sub, hint, mute };
     if (this.chapter === 0 && this.levelIdx <= 0) {
-      hint.setText('← →  move    ↑ / Space  jump (again in air = flip)    ↓  duck    W  swing up    S  swing down    A / D  block    1…0  perks    Esc  pause');
+      hint.setText(keyHint(
+        '← →  move    ↑ / Space  jump (again in air = flip)    ↓  duck    W  swing up    S  swing down    A / D  block    1…0  perks    Esc  pause',
+        'Stick: walk, ↑ jump (again in air = flip), ↓ duck\nButtons: swing up, swing down, block · tap a perk at the top',
+      ));
+      if (isTouch()) hint.setY(HEIGHT - 190);
       hint.setAlpha(1);
       this.tweens.add({ targets: hint, alpha: 0, delay: 14000, duration: 1500 });
     }
@@ -375,6 +401,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
     const k = this.keys;
     const JD = Phaser.Input.Keyboard.JustDown;
+    this.touch?.draw();
 
     if (JD(k.esc)) {
       this.openPause();
@@ -403,6 +430,17 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       block: k.a.isDown || k.d.isDown,
       up: k.up.isDown || k.space.isDown,
     };
+    if (this.touch) {
+      const t = this.touch.read();
+      input.left ||= t.left;
+      input.right ||= t.right;
+      input.down ||= t.down;
+      input.up ||= t.up;
+      input.jumpPressed ||= t.jumpPressed;
+      input.swingHigh ||= t.swingHigh;
+      input.swingLow ||= t.swingLow;
+      input.block ||= t.block;
+    }
     if (this.phase === 'over' || this.phase === 'enter') {
       input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
       if (this.phase === 'enter') input.right = this.player.x < ARENA_LEFT + 200;
@@ -477,6 +515,21 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const moved = Math.abs(p.zone.x - before);
       if (moved < overlapX - 0.5) z.zone.x -= dir * (overlapX - moved); // pinned to a wall: shove the zombie
     }
+  }
+
+  /** Pause button, top right (taps go through TouchControls, the mouse clicks it here). */
+  private drawPauseButton() {
+    const { x, y } = PAUSE_BTN;
+    const g = this.add.graphics().setDepth(100).setScrollFactor(0);
+    g.lineStyle(3, INK, 0.85);
+    g.strokeCircle(x, y, 24);
+    g.fillStyle(INK, 0.85);
+    g.fillRect(x - 9, y - 11, 6, 22);
+    g.fillRect(x + 3, y - 11, 6, 22);
+    const z = this.add.zone(x, y, 56, 56).setScrollFactor(0).setDepth(100).setInteractive({ useHandCursor: true });
+    z.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (!p.wasTouch) this.openPause();
+    });
   }
 
   private openPause() {
@@ -678,7 +731,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         sfx.denied();
         this.perkBar.deny(i);
         const have = PERKS.filter((_p, j) => this.perkCounts[j] > 0).map((p) => `${p.key} – ${p.name}`);
-        this.popText(this.player.x, this.player.hurtbox().top - 30, have.length ? `Slot ${PERKS[i].key} is empty. Press ${have.join(', ')}` : 'No perks yet');
+        this.popText(this.player.x, this.player.hurtbox().top - 30, have.length ? (isTouch() ? 'This slot is empty' : `Slot ${PERKS[i].key} is empty. Press ${have.join(', ')}`) : 'No perks yet');
       }
       return;
     }
@@ -769,7 +822,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         this.perkBar.pop(i);
       },
     });
-    this.tip('perk', `You got a perk! Press ${PERKS[i].key} to use it.\nIt works for a few seconds.`);
+    this.tip('perk', keyHint(`You got a perk! Press ${PERKS[i].key} to use it.\nIt works for a few seconds.`, 'You got a perk! Tap it at the top to use it.\nIt works for a few seconds.'));
     if (pk.choice) {
       // the other two free perks vanish, then the way on opens
       for (const o of this.pickups) {
@@ -1299,9 +1352,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       if (z.size === 'small') this.tip('jump', 'Small zombies bite your legs — JUMP (↑)!\nOnly a DOWN swing (S) reaches them.');
       else this.tip('duck', 'This one swings high — DUCK (hold ↓) or BLOCK (hold A / D)!\nThe shield bar wears down and refills.');
     }
-    if (this.zombies.some((z) => z.size === 'big' && z.state === 'walk')) this.tip('flip', 'Too big to jump over? Jump, then press ↑ again while holding ← or →\nto FLIP right through it!');
+    if (this.zombies.some((z) => z.size === 'big' && z.state === 'walk')) this.tip('flip', keyHint('Too big to jump over? Jump, then press ↑ again while holding ← or →\nto FLIP right through it!', 'Too big to jump over? Jump, then push the stick up again\n(up and to the side) to FLIP right through it!'));
     if (this.zombies.some((z) => z.size === 'giant' && z.state === 'walk')) this.tip('giant', 'A GIANT! Duck its swing and keep hitting.\nSwing UP (W) does more damage.');
-    if (this.levelIdx === 0 && this.phase === 'between' && this.waveIdx === 0) this.tip('wall', 'Tip: jump into a wall, then press ↑ again to bounce off it!');
+    if (this.levelIdx === 0 && this.phase === 'between' && this.waveIdx === 0) this.tip('wall', keyHint('Tip: jump into a wall, then press ↑ again to bounce off it!', 'Tip: jump into a wall, then push the stick up again to bounce off it!'));
     if (this.levelIdx === 0 && this.phase === 'wave' && this.phaseT > 9) this.tip('secret', 'Psst… things that wobble may hide a PERK.\nHit them, put out candles, scare the birds!');
   }
 

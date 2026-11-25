@@ -14,7 +14,8 @@ for (let i = 0; i < 100 && !ready; i++) await sleep(100);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
+// GPU driver notes ("GPU stall due to ReadPixels") come from the machine under load, not from the game
+page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('GL Driver Message')) errors.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
 
 async function shot(name) { await page.screenshot({ path: `tests/shots/${name}.png` }); }

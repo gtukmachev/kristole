@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-const PORT = 5199;
+const PORT = 5204;
 const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
 let ready = false; server.stdout.on('data', (d) => { if (String(d).includes('Local')) ready = true; });
 for (let i = 0; i < 100 && !ready; i++) await sleep(100);

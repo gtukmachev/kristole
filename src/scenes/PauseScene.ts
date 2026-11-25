@@ -3,6 +3,7 @@ import { menuScene } from '../game/menuChoice';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, INK, PAPER, WIDTH, hex } from '../game/constants';
 import { sfx } from '../game/sfx';
 import { GridNav } from '../game/ui';
+import { handsSwapped, isTouch, setHandsSwapped } from '../game/touch';
 
 export class PauseScene extends Phaser.Scene {
   constructor() {
@@ -14,11 +15,22 @@ export class PauseScene extends Phaser.Scene {
     g.fillStyle(PAPER, 0.82);
     g.fillRect(0, 0, WIDTH, HEIGHT);
     this.add.text(WIDTH / 2, 170, 'PAUSED', { fontFamily: FONT_IMPACT, fontSize: '96px', color: hex(INK) }).setOrigin(0.5);
-    const items = ['Resume', 'Restart level', 'Perks', 'Main menu'];
-    const actions = [() => this.resume(), () => this.restart(), () => this.perks(), () => this.toMenu()];
-    const texts = items.map((s, i) =>
+    const soundLabel = () => (sfx.muted ? 'Sound: off' : 'Sound: on');
+    const handsLabel = () => (handsSwapped() ? 'Stick: right hand' : 'Stick: left hand');
+    const items = [
+      { label: 'Resume', act: () => this.resume() },
+      { label: 'Restart level', act: () => this.restart() },
+      { label: 'Perks', act: () => this.perks() },
+      { label: soundLabel(), act: () => { sfx.toggleMute(); texts[3].setText(soundLabel()); } },
+      ...(isTouch() ? [{ label: handsLabel(), act: () => { setHandsSwapped(!handsSwapped()); texts[4].setText(handsLabel()); } }] : []),
+      { label: 'Main menu', act: () => this.toMenu() },
+    ];
+    const actions = items.map((it) => it.act);
+    const step = items.length > 5 ? 60 : 66;
+    const top = items.length > 5 ? 262 : 280;
+    const texts: Phaser.GameObjects.Text[] = items.map((it, i) =>
       this.add
-        .text(WIDTH / 2, 290 + i * 72, s, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '42px', color: hex(INK) })
+        .text(WIDTH / 2, top + i * step, it.label, { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '40px', color: hex(INK) })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true }),
     );
@@ -29,7 +41,7 @@ export class PauseScene extends Phaser.Scene {
           if (!f) return;
           frame.clear();
           frame.lineStyle(4, INK, 1);
-          frame.strokeRect(WIDTH / 2 - 200, t.y - 32, 400, 64);
+          frame.strokeRect(WIDTH / 2 - 200, t.y - 29, 400, 58);
         },
         activate: () => {
           sfx.click();
@@ -40,7 +52,7 @@ export class PauseScene extends Phaser.Scene {
     ]);
     texts.forEach((t, i) => t.on('pointerup', () => rows[i][0].activate()));
     new GridNav(this, rows, () => this.resume());
-    this.add.text(WIDTH / 2, HEIGHT - 60, '← →  move  ·  ↑ / Space  jump, again in air = flip  ·  ↓  duck  ·  W  swing up  ·  S  swing down  ·  A / D  block  ·  1…0  perks  ·  M  sound', {
+    if (!isTouch()) this.add.text(WIDTH / 2, HEIGHT - 50, '← →  move  ·  ↑ / Space  jump, again in air = flip  ·  ↓  duck  ·  W  swing up  ·  S  swing down  ·  A / D  block  ·  1…0  perks  ·  M  sound', {
       fontFamily: FONT_SLAB, fontSize: '18px', color: hex(INK),
     }).setOrigin(0.5);
   }

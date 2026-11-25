@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { hint as keyHint } from '../game/touch';
 import { menuScene } from '../game/menuChoice';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, MENU_ORANGE, MENU_PALE, MENU_TEAL, MENU_WHITE, MENU_YELLOW, WIDTH, hex } from '../game/constants';
 import { CHAPTERS, WEAPONS } from '../game/data';
@@ -74,6 +75,9 @@ export class WeaponScene extends Phaser.Scene {
     cards.forEach((c) => c.zone.on('pointerup', () => c.activate()));
     const nav = new GridNav(this, [cards.map((c) => ({ focus: c.focus, activate: c.activate, target: c.zone }))], () => this.scene.start(menuScene(), { chapter: this.chapter }));
     nav.set(0, ids.indexOf(last));
-    this.add.text(WIDTH / 2, HEIGHT - 30, `← →  choose     Enter  ${this.fromMenu ? 'take it' : 'fight!'}     Esc  back`, { fontFamily: FONT_SLAB, fontSize: '18px', color: '#888888' }).setOrigin(0.5);
+    this.add.text(WIDTH / 2, HEIGHT - 30, keyHint(`← →  choose     Enter  ${this.fromMenu ? 'take it' : 'fight!'}     Esc  back`, `Tap a weapon to ${this.fromMenu ? 'take it' : 'fight!'}`), { fontFamily: FONT_SLAB, fontSize: '18px', color: '#888888' }).setOrigin(0.5);
+    // a way back without Esc (phones)
+    const back = this.add.text(36, 30, '‹  Back', { fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '26px', color: '#aaaaaa' }).setInteractive({ useHandCursor: true });
+    back.on('pointerup', () => this.scene.start(menuScene(), { chapter: this.chapter }));
   }
 }
