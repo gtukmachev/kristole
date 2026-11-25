@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { ACC, setAccent, FONT_HAND, FONT_IMPACT, FONT_SLAB, HEIGHT, INK, INK_SOFT, PAPER, WIDTH, hex } from '../game/constants';
 import { CHAPTERS } from '../game/data';
 import { storage, type WeaponId } from '../game/storage';
@@ -55,9 +56,9 @@ export class ResultScene extends Phaser.Scene {
 
     const opts: { label: string; act: () => void }[] = [];
     if (d.win && d.chapter + 1 < CHAPTERS.length) opts.push({ label: 'Next chapter', act: () => this.scene.start('Weapon', { chapter: d.chapter + 1 }) });
-    opts.push({ label: d.win ? 'Play again' : 'Try again', act: () => this.scene.start('Game', { chapter: d.chapter, weapon: d.weapon }) });
+    opts.push({ label: d.win ? 'Play again' : 'Try again', act: () => this.scene.start('Game', { chapter: d.chapter, level: -1, weapon: d.weapon, resumeLevel: storage.resumeLevel(d.chapter) }) });
     opts.push({ label: 'Leaderboard', act: () => this.scene.start('Leaderboard', { highlight: rank }) });
-    opts.push({ label: 'Main menu', act: () => this.scene.start('Menu', { chapter: d.chapter }) });
+    opts.push({ label: 'Main menu', act: () => this.scene.start(menuScene(), { chapter: d.chapter }) });
     const frame = this.add.graphics();
     const spacing = 260;
     const x0 = WIDTH / 2 - ((opts.length - 1) * spacing) / 2;
@@ -83,7 +84,7 @@ export class ResultScene extends Phaser.Scene {
       return item;
     });
     // Ignore keys for a moment so a held attack key doesn't skip the screen.
-    this.time.delayedCall(600, () => new GridNav(this, [items], () => this.scene.start('Menu', { chapter: d.chapter })));
+    this.time.delayedCall(600, () => new GridNav(this, [items], () => this.scene.start(menuScene(), { chapter: d.chapter })));
     items[0].focus(true);
   }
 }

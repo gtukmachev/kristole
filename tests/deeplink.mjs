@@ -22,6 +22,6 @@ for (const [url, want] of cases) {
 }
 await page.goto('http://localhost:5190/');
 await sleep(1200);
-console.log((await page.evaluate(() => window.__kristole.scene.isActive('Menu'))) ? 'PASS / -> menu' : 'FAIL / -> menu');
+console.log((await page.evaluate(() => window.__kristole.scene.isActive('MapMenu'))) ? 'PASS / -> menu' : 'FAIL / -> menu');
 console.log(errors.length ? 'ERRORS ' + errors.join('\n') : 'no page errors');
 await browser.close(); servers.forEach((s) => s.kill());

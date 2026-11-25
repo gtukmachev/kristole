@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { HEIGHT, MENU_BG, WIDTH } from './game/constants';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
+import { MapMenuScene } from './scenes/MapMenuScene';
 import { WeaponScene } from './scenes/WeaponScene';
 import { AvatarScene } from './scenes/AvatarScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
@@ -10,6 +11,7 @@ import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
 import { PerksScene } from './scenes/PerksScene';
 import { installKeyDebug } from './keyDebug';
+import { storage } from './game/storage';
 
 installKeyDebug();
 
@@ -22,7 +24,9 @@ const game = new Phaser.Game({
   antialias: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 2000 }, debug: false } },
-  scene: [BootScene, MenuScene, WeaponScene, AvatarScene, LeaderboardScene, GameScene, PauseScene, ResultScene, PerksScene],
+  scene: [BootScene, MapMenuScene, MenuScene, WeaponScene, AvatarScene, LeaderboardScene, GameScene, PauseScene, ResultScene, PerksScene],
 });
 
 (window as unknown as { __kristole: Phaser.Game }).__kristole = game;
+// test hook
+(window as unknown as { __storage: typeof storage }).__storage = storage;

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { GROUND_Y } from '../game/constants';
 import { CHAPTERS } from '../game/data';
+import { storage } from '../game/storage';
 
 /** Generates the few textures the game needs (no image files) and routes to the first scene. */
 export class BootScene extends Phaser.Scene {
@@ -70,6 +72,10 @@ export class BootScene extends Phaser.Scene {
     g.destroy();
     void GROUND_Y;
 
+    storage.init().then(() => this.route());
+  }
+
+  private route() {
     // URL shortcuts for testing: ?scene=game&chapter=0&level=2&weapon=axe
     const p = new URLSearchParams(window.location.search);
     // Test shortcut: /<chapter>/<level> (1-based), e.g. /2/3 = chapter 2, level 3; /2/0 = its level 0 (perk pick).
@@ -96,8 +102,10 @@ export class BootScene extends Phaser.Scene {
     if (target === 'game') this.scene.start('Game', { chapter, level, weapon, fromPlace: p.get('from') ?? undefined, perks });
     else if (target === 'weapon') this.scene.start('Weapon', { chapter });
     else if (target === 'avatar') this.scene.start('Avatar');
+    else if (target === 'classic') this.scene.start('Menu');
+    else if (target === 'map') this.scene.start('MapMenu');
     else if (target === 'leaderboard') this.scene.start('Leaderboard');
     else if (target === 'result') this.scene.start('Result', { win: p.has('win'), score: 1234, chapter, level, weapon, kills: 17 });
-    else this.scene.start('Menu');
+    else this.scene.start(menuScene());
   }
 }

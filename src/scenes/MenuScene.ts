@@ -8,6 +8,7 @@ import { GridNav, buttonItem, makeButton } from '../game/ui';
 import { sfx } from '../game/sfx';
 import { drawFigure, pose } from '../game/figure';
 import { bake } from '../game/background';
+import { isDebug, setMenuKind } from '../game/menuChoice';
 
 type Seg = [number, number, number, number];
 
@@ -178,6 +179,15 @@ export class MenuScene extends Phaser.Scene {
     };
     new GridNav(this, [[buttonItem(play), buttonItem(avatar), buttonItem(board)], [buttonItem(events), buttonItem(perks), buttonItem(rewards)], [chapterItem]]);
     this.input.keyboard!.on('keydown-M', () => sfx.toggleMute());
+    if (isDebug()) {
+      const t = this.add.text(WIDTH - 12, 12, '⇄ map menu', {
+        fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '14px', color: '#000000', backgroundColor: '#f08a1c', padding: { x: 8, y: 5 },
+      }).setOrigin(1, 0).setDepth(14).setInteractive({ useHandCursor: true });
+      t.on('pointerup', () => {
+        setMenuKind('map');
+        this.scene.start('MapMenu');
+      });
+    }
   }
 
   update(_t: number, dms: number) {

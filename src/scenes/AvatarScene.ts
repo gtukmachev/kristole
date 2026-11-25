@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { FONT_IMPACT, FONT_SLAB, MENU_ORANGE, MENU_PALE, MENU_WHITE, MENU_YELLOW, PAPER, WIDTH, hex } from '../game/constants';
 import { drawFigure, pose } from '../game/figure';
 import { sfx } from '../game/sfx';
@@ -23,6 +24,8 @@ export class AvatarScene extends Phaser.Scene {
   private editingName = false;
   private t = 0;
   private editStartedAt = 0;
+  private nameBefore = 'PLAYER';
+  private switchText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('Avatar');
@@ -78,13 +81,24 @@ export class AvatarScene extends Phaser.Scene {
   private toggleEdit() {
     this.editingName = !this.editingName;
     if (this.editingName) {
+      this.nameBefore = this.profile.name;
       this.profile.name = '';
       this.editStartedAt = performance.now();
     } else {
-      if (!this.profile.name.trim()) this.profile.name = 'PLAYER';
-      storage.setProfile(this.profile);
+      if (!this.profile.name.trim()) this.profile.name = this.nameBefore;
+      // a new name = a new player; a known name loads that player
+      const r = storage.setProfile(this.profile);
+      if (r !== 'same') this.showSwitch(r === 'loaded');
+      this.profile = storage.getProfile();
     }
     this.refresh();
+  }
+
+  private showSwitch(known: boolean) {
+    this.switchText?.destroy();
+    this.switchText = this.add.text(600, 262, known ? 'Welcome back! Your progress is loaded.' : 'New player — a fresh start!', {
+      fontFamily: FONT_SLAB, fontSize: '20px', color: hex(MENU_PALE),
+    });
   }
 
   private cycleGear(d: number) {
@@ -104,7 +118,7 @@ export class AvatarScene extends Phaser.Scene {
   private leave() {
     if (this.editingName) return;
     storage.setProfile(this.profile);
-    this.scene.start('Menu');
+    this.scene.start(menuScene());
   }
 
   update(_t: number, dms: number) {

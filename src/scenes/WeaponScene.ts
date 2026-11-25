@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, MENU_ORANGE, MENU_PALE, MENU_TEAL, MENU_WHITE, MENU_YELLOW, WIDTH, hex } from '../game/constants';
 import { CHAPTERS, WEAPONS } from '../game/data';
 import { drawWeapon } from '../game/figure';
 import { sfx } from '../game/sfx';
-import type { WeaponId } from '../game/storage';
+import { storage, type WeaponId } from '../game/storage';
 import { GridNav } from '../game/ui';
 import { menuBackdrop } from './MenuScene';
 
@@ -70,12 +71,12 @@ export class WeaponScene extends Phaser.Scene {
         } catch {
           /* ignore */
         }
-        this.scene.start('Game', { chapter: this.chapter, weapon: id });
+        this.scene.start('Game', { chapter: this.chapter, level: -1, weapon: id, resumeLevel: storage.resumeLevel(this.chapter) });
       };
       return { focus, activate: choose, zone };
     });
     cards.forEach((c) => c.zone.on('pointerup', () => c.activate()));
-    const nav = new GridNav(this, [cards.map((c) => ({ focus: c.focus, activate: c.activate, target: c.zone }))], () => this.scene.start('Menu', { chapter: this.chapter }));
+    const nav = new GridNav(this, [cards.map((c) => ({ focus: c.focus, activate: c.activate, target: c.zone }))], () => this.scene.start(menuScene(), { chapter: this.chapter }));
     nav.set(0, ids.indexOf(last));
     this.add.text(WIDTH / 2, HEIGHT - 30, '← →  choose     Enter  fight!     Esc  back', { fontFamily: FONT_SLAB, fontSize: '18px', color: '#888888' }).setOrigin(0.5);
   }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { sfx } from '../game/sfx';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, MENU_ORANGE, MENU_PALE, MENU_WHITE, MENU_YELLOW, WIDTH, hex } from '../game/constants';
 import { CHAPTERS, WEAPONS } from '../game/data';
@@ -50,7 +51,7 @@ export class LeaderboardScene extends Phaser.Scene {
         g.strokeRect(180, y - 4, 1000, 38);
       }
     });
-    const back = makeButton(this, { x: WIDTH / 2, y: HEIGHT - 60, w: 240, h: 70, label: 'Back', fontSize: 34, onClick: () => this.scene.start('Menu') });
-    new GridNav(this, [[buttonItem(back)]], () => this.scene.start('Menu'));
+    const back = makeButton(this, { x: WIDTH / 2, y: HEIGHT - 60, w: 240, h: 70, label: 'Back', fontSize: 34, onClick: () => this.scene.start(menuScene()) });
+    new GridNav(this, [[buttonItem(back)]], () => this.scene.start(menuScene()));
   }
 }

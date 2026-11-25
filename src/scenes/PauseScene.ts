@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, INK, PAPER, WIDTH, hex } from '../game/constants';
 import { sfx } from '../game/sfx';
 import { GridNav } from '../game/ui';
@@ -62,6 +63,6 @@ export class PauseScene extends Phaser.Scene {
 
   private toMenu() {
     this.scene.stop('Game');
-    this.scene.start('Menu');
+    this.scene.start(menuScene());
   }
 }

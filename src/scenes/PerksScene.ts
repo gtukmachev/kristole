@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { menuScene } from '../game/menuChoice';
 import { ACC, FONT_HAND, FONT_IMPACT, FONT_SLAB, HEIGHT, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH, hex } from '../game/constants';
 import { DEMO_H, DEMO_W, drawPerkDemo } from '../game/perkDemo';
 import { PERKS, drawPerkIcon } from '../game/perks';
@@ -156,6 +157,6 @@ export class PerksScene extends Phaser.Scene {
     if (this.from === 'pause') {
       this.scene.stop();
       this.scene.launch('Pause');
-    } else this.scene.start('Menu');
+    } else this.scene.start(menuScene());
   }
 }

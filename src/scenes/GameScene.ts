@@ -30,6 +30,8 @@ export interface GameSceneData {
   perks?: number[];
   /** Seconds left of perks that were working when the player walked into the next place. */
   perksLeft?: number[];
+  /** Camp only: after it, skip to this level (the hero died there last time). */
+  resumeLevel?: number;
 }
 
 /** 'choose': level 0 of a chapter, pick one free perk. */
@@ -133,6 +135,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   private heli?: { g: Phaser.GameObjects.Graphics; x: number; dir: number; t: number };
   private heliQueue: ZombieSize[] = [];
   private heliDropT = 0;
+  private resumeLevel?: number;
 
   constructor() {
     super('Game');
@@ -147,6 +150,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.levelStartScore = this.score;
     this.levelStartKills = data.kills ?? 0;
     this.fromPlace = data.fromPlace;
+    this.resumeLevel = this.levelIdx < 0 ? data.resumeLevel : undefined;
     this.hearts = [];
     this.slowLeft = 0;
     this.zombies = [];
@@ -189,6 +193,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     this.tweens.timeScale = 1;
     drawBackground(this, this.place);
     this.ambient = new Ambient(this, AMBIENT[this.place.id] ?? 'sky');
+    // Progress is always saved: the map puts the hero here, a death resumes from this level.
+    if (!this.isCamp) storage.setSpot(this.chapter, this.levelIdx);
+    else if (storage.getSpot()?.chapter !== this.chapter) storage.setSpot(this.chapter, -1);
 
     const params = new URLSearchParams(window.location.search);
     this.player = new Player(this, this, this.fromPlace ? ARENA_LEFT + 40 : WIDTH / 2, this.weaponId, storage.getProfile());
@@ -1032,7 +1039,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       perksLeft: this.perkLeft,
     };
     if (this.levelIdx < ch.levels - 1) {
-      this.scene.restart({ chapter: this.chapter, level: this.levelIdx + 1, ...carry } satisfies GameSceneData);
+      const next = this.isCamp && this.resumeLevel !== undefined ? this.resumeLevel : this.levelIdx + 1;
+      this.scene.restart({ chapter: this.chapter, level: next, ...carry } satisfies GameSceneData);
     } else if (this.chapter < CHAPTERS.length - 1) {
       // straight on into the next chapter: its level 0 first
       storage.unlockChapter(this.chapter + 1);
@@ -1043,6 +1051,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   private finish(win: boolean) {
+    // the whole game is beaten: next time the last chapter starts from its camp
+    if (win) storage.setSpot(this.chapter, -1);
     this.scene.start('Result', {
       win,
       score: this.score,
@@ -1367,7 +1377,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   restartData(): GameSceneData {
     return {
       chapter: this.chapter, level: this.levelIdx, weapon: this.weaponId, score: this.levelStartScore, hp: this.startHp, kills: this.levelStartKills,
-      perks: this.perksAtStart, perksLeft: this.perksLeftAtStart,
+      perks: this.perksAtStart, perksLeft: this.perksLeftAtStart, resumeLevel: this.resumeLevel,
     };
   }
 
