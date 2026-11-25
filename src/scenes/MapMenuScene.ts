@@ -156,7 +156,7 @@ export class MapMenuScene extends Phaser.Scene {
     this.buildGroves();
 
     // The static map is painted once into a texture (thousands of pen strokes).
-    const key = `worldmap-${this.unlocked}`;
+    const key = 'worldmap';
     const g = this.make.graphics({}, false);
     this.paintStatic(g);
     if (this.textures.exists(key)) this.textures.remove(key);
@@ -590,7 +590,7 @@ export class MapMenuScene extends Phaser.Scene {
     nav.set(1, 0);
 
     if (isDebug()) {
-      const t = this.add.text(WIDTH - 12, HEADER_H + 16, '⇄ classic menu', {
+      const t = this.add.text(WIDTH - 16, 40, '⇄ classic menu', {
         fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '14px', color: '#ffffff', backgroundColor: '#8f3a08', padding: { x: 8, y: 5 },
       }).setOrigin(1, 0).setDepth(14).setInteractive({ useHandCursor: true });
       t.on('pointerup', () => {

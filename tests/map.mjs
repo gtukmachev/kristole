@@ -111,10 +111,34 @@ try {
     await waitFor(pg, () => window.__kristole?.scene.isActive('MapMenu'));
     ok((await pg.evaluate(() => window.__storage.getProfile().name)) === 'MAX', 'current player remembered after reload');
 
+    // replaying an older chapter keeps the resume point of another one
+    const rs = await pg.evaluate(() => {
+      const s = window.__storage;
+      s.unlockChapter(5);
+      s.setSpot(4, 2);
+      s.setSpot(1, -1); // camp of an old chapter
+      const keep = s.resumeLevel(4), here = s.getSpot().chapter;
+      s.clearResume(4);
+      return { keep, here, after: s.resumeLevel(4) };
+    });
+    ok(rs.keep === 2 && rs.here === 1 && rs.after === undefined, `resume per chapter ${JSON.stringify(rs)}`);
+    // a copy saved while IndexedDB was unavailable is merged in on the next start
+    await pg.evaluate(() => localStorage.setItem('kristole.v7', JSON.stringify({
+      players: [{ key: 'zed', name: 'ZED', headgear: 'hat', unlockedChapter: 5, at: { chapter: 5, level: 1 }, resume: { 5: 1 } }],
+      current: 'zed', board: [{ name: 'ZED', score: 7777, chapter: 5, level: 1, weapon: 'axe', date: 5 }],
+    })));
+    await sleep(300);
+    await pg.reload();
+    await waitFor(pg, () => window.__kristole?.scene.isActive('MapMenu'));
+    const fb = await pg.evaluate(() => ({ name: window.__storage.getProfile().name, un: window.__storage.getProgress().unlockedChapter, top: window.__storage.getBoard()[0]?.score, left: localStorage.getItem('kristole.v7') }));
+    ok(fb.name === 'ZED' && fb.un === 5 && fb.top === 7777 && fb.left === null, `fallback copy merged ${JSON.stringify(fb)}`);
+    await pg.evaluate(() => window.__storage.setProfile({ name: 'MAX', headgear: 'none' }));
+    await sleep(300);
+
     // --- 5. debug switch between menus, remembered ---
     await pg.goto(base + '?debug=true');
     await waitFor(pg, () => window.__kristole?.scene.isActive('MapMenu'));
-    await pg.mouse.click(1210, 190); // "⇄ classic menu"
+    await pg.mouse.click(1210, 50); // "⇄ classic menu"
     ok(await waitFor(pg, () => window.__kristole.scene.isActive('Menu')), 'debug button switches to the classic menu');
     await pg.goto(base);
     ok(await waitFor(pg, () => window.__kristole?.scene.isActive('Menu')), 'choice remembered');

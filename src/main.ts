@@ -12,6 +12,7 @@ import { ResultScene } from './scenes/ResultScene';
 import { PerksScene } from './scenes/PerksScene';
 import { installKeyDebug } from './keyDebug';
 import { storage } from './game/storage';
+import { isDebug } from './game/menuChoice';
 
 installKeyDebug();
 
@@ -28,5 +29,5 @@ const game = new Phaser.Game({
 });
 
 (window as unknown as { __kristole: Phaser.Game }).__kristole = game;
-// test hook
-(window as unknown as { __storage: typeof storage }).__storage = storage;
+// test hook (dev server or ?debug=true only)
+if (import.meta.env.DEV || isDebug()) (window as unknown as { __storage: typeof storage }).__storage = storage;

@@ -194,8 +194,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     drawBackground(this, this.place);
     this.ambient = new Ambient(this, AMBIENT[this.place.id] ?? 'sky');
     // Progress is always saved: the map puts the hero here, a death resumes from this level.
-    if (!this.isCamp) storage.setSpot(this.chapter, this.levelIdx);
-    else if (storage.getSpot()?.chapter !== this.chapter) storage.setSpot(this.chapter, -1);
+    storage.setSpot(this.chapter, this.levelIdx);
 
     const params = new URLSearchParams(window.location.search);
     this.player = new Player(this, this, this.fromPlace ? ARENA_LEFT + 40 : WIDTH / 2, this.weaponId, storage.getProfile());
@@ -1044,6 +1043,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     } else if (this.chapter < CHAPTERS.length - 1) {
       // straight on into the next chapter: its level 0 first
       storage.unlockChapter(this.chapter + 1);
+      storage.clearResume(this.chapter);
       this.scene.restart({ chapter: this.chapter + 1, level: -1, ...carry } satisfies GameSceneData);
     } else {
       this.finish(true);
@@ -1052,7 +1052,10 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
 
   private finish(win: boolean) {
     // the whole game is beaten: next time the last chapter starts from its camp
-    if (win) storage.setSpot(this.chapter, -1);
+    if (win) {
+      storage.clearResume(this.chapter);
+      storage.setSpot(this.chapter, -1);
+    }
     this.scene.start('Result', {
       win,
       score: this.score,
