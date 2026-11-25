@@ -107,6 +107,23 @@ ok(angry.hp < angry.max && angry.angry, `hit from the ledge makes it angry (${JS
 l = await waitLog(5000);
 ok(l[0]?.hit, `the big one strikes back (${JSON.stringify(l[0])}, ${await states()})`);
 
+// 6. Crouched low swing from the ledge reaches a medium zombie's head below (as drawn): it gets angry and jumps.
+await setup('chapter=0&level=1');
+await playerTo(plat.x, plat.y - 75);
+await spawnAt('medium', plat.x + 50);
+await playerTo(plat.x, plat.y - 75);
+await page.evaluate(() => { window.__scene.player.facing = 1; });
+await sleep(200);
+await page.keyboard.down('ArrowDown');
+await sleep(150);
+await page.keyboard.down('KeyS'); await sleep(40); await page.keyboard.up('KeyS');
+await sleep(350);
+await page.keyboard.up('ArrowDown');
+const m = await page.evaluate(() => { const z = window.__scene.zombies.find((q) => q.__test); return { angry: z.angryUntil > z.time, hp: z.hp, max: z.maxHp }; });
+ok(m.hp < m.max && m.angry, `crouched swing from the ledge hits the medium below and angers it (${JSON.stringify(m)})`);
+l = await waitLog(5000);
+ok((await states()).includes('jumpUp') && l[0]?.hit, `the medium jumps and strikes back (${await states()})`);
+
 ok(errors.length === 0, `no page errors ${errors.join('; ')}`);
 } catch (e) {
   fails++;

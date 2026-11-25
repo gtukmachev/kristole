@@ -235,7 +235,8 @@ export class Player {
       }
       [top, bottom] = [f - 130 * FIG, f - 15 * FIG];
     } else if (crouched) {
-      [top, bottom] = kind === 'high' ? [f - 80 * FIG, f - 28 * FIG] : [f - 50 * FIG, f + 4];
+      // the crouched low swing goes into the ground: from a ledge the blade reaches the heads below, as drawn
+      [top, bottom] = kind === 'high' ? [f - 80 * FIG, f - 28 * FIG] : [f - 50 * FIG, f + 55 * FIG];
     } else {
       [top, bottom] = kind === 'high' ? [f - 132 * FIG, f - 72 * FIG] : [f - 70 * FIG, f + 4];
     }
