@@ -52,6 +52,8 @@ const WALL_JUMP_VX = 400;
 const WALL_JUMP_VY = 800;
 export const PLAYER_W = 34 * FIG;
 export const PLAYER_H = 110 * FIG;
+/** Hearts overfill health up to 200%. */
+export const OVERHEAL_MAX = 2;
 export const PLAYER_CROUCH_H = 62 * FIG;
 
 // Key poses (facing right).
@@ -291,8 +293,10 @@ export class Player {
     this.host.playerDied(this);
   }
 
-  heal(amount: number) {
-    this.hp = Math.min(this.maxHp, this.hp + amount);
+  /** Hearts can overfill health past 100%, up to OVERHEAL_MAX; other healing stops at 100%. */
+  heal(amount: number, overfill = false) {
+    const cap = overfill ? this.maxHp * OVERHEAL_MAX : this.maxHp;
+    this.hp = Math.max(this.hp, Math.min(cap, this.hp + amount));
   }
 
   update(dt: number, input: PlayerInput) {

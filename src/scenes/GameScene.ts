@@ -650,7 +650,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       const hb = p.hurtbox();
       if (!p.dead && h.x > hb.left - 24 && h.x < hb.right + 24 && h.y > hb.top - 24 && h.y < hb.bottom + 10) {
         const amount = 25;
-        p.heal(amount);
+        p.heal(amount, true);
         sfx.heal();
         this.popText(h.x, h.y - 20, `+${amount} ♥`);
         h.destroy();
@@ -1021,7 +1021,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const carry = {
       weapon: this.weaponId,
       score: this.score,
-      hp: Math.min(100, this.player.hp + (this.isCamp ? 0 : 35)),
+      // the level bonus heals up to 100%; health overfilled by hearts carries over
+      hp: Math.max(this.player.hp, Math.min(100, this.player.hp + (this.isCamp ? 0 : 35))),
       kills: this.kills,
       fromPlace: this.place.id,
       perks: this.perkCounts,
@@ -1298,7 +1299,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     const { hp, score, combo, wave } = this.hud;
     hp.clear();
     const x = 24, y = 46, w = 240, h = 18;
-    const frac = this.player.hp / this.player.maxHp;
+    const frac = Math.min(1, this.player.hp / this.player.maxHp);
+    // overfilled by hearts: 100…200% fills back from the right end, in the accent colour
+    const over = Math.max(0, Math.min(1, this.player.hp / this.player.maxHp - 1));
     hp.fillStyle(0xffffff, 1);
     hp.fillRect(x, y, w, h);
     // pulse when low on health
@@ -1308,6 +1311,12 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     // hatch the empty part so it reads clearly in B&W
     hp.lineStyle(1, INK, 0.35);
     for (let i = x + w * frac; i < x + w; i += 6) hp.lineBetween(i, y + h, Math.min(i + 6, x + w), y);
+    if (over > 0) {
+      hp.fillStyle(ACC.main, 1);
+      hp.fillRect(x + w * (1 - over), y, w * over, h);
+      hp.lineStyle(2, 0xffffff, 0.9);
+      hp.lineBetween(x + w * (1 - over), y + 2, x + w * (1 - over), y + h - 2);
+    }
     hp.lineStyle(3, INK, 1);
     hp.strokeRect(x, y, w, h);
     // Shield bar under the health bar: grey, hatched when empty, flashes red when broken.
