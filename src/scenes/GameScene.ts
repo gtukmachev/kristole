@@ -794,7 +794,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   }
 
   throwSpear(player: Player, kind: SwingKind, x: number, y: number) {
-    this.spears.push(new Spear(this, x, y, player.facing, kind));
+    const sp = new Spear(this, x, y, player.facing, kind);
+    sp.throwerFoot = player.onGround ? player.footY : Infinity; // a hit counts as "from the ledge" by where it was thrown
+    this.spears.push(sp);
     sfx.spear();
   }
 
@@ -807,7 +809,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
         if (!z.hittable || sp.hit.has(z) || !overlap(box, z.hurtbox())) continue;
         sp.hit.add(z); // pierces: keeps flying through
         const dmg = Math.round(45 * (this.player.fx.sword ? 1.6 : 1));
-        if (this.fromLedge(z)) z.anger();
+        if (this.fromLedge(z, sp.throwerFoot)) z.anger();
         this.hitZombie(z, dmg, sp.kind, sp.dir, 220, box.top, false, true);
       }
       if (sp.dead) sp.destroy();
@@ -1068,12 +1070,12 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
   }
 
-  /** Shared by swings, spears and the angel. `heavyFx` = full hit-stop and shake (not for rapid hits). */
-  /** The player is standing on a ledge above this zombie. */
-  private fromLedge(z: Zombie) {
-    return this.player.onGround && z.footY - this.player.footY > 20;
+  /** The player is standing on a ledge above this zombie (or was, at `footY`, when throwing a spear). */
+  private fromLedge(z: Zombie, footY = this.player.onGround ? this.player.footY : Infinity) {
+    return z.footY - footY > 20;
   }
 
+  /** Shared by swings, spears and the angel. `heavyFx` = full hit-stop and shake (not for rapid hits). */
   private hitZombie(z: Zombie, dmg: number, kind: SwingKind, dir: number, knockback: number, minY: number, heavyFx: boolean, heavySound: boolean) {
     const killed = z.takeHit(dmg, kind, dir, knockback);
     if (this.player.fx.freeze && !killed) z.freeze(1.5);

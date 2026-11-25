@@ -193,6 +193,8 @@ export function activationFx(scene: Phaser.Scene, id: PerkId, player: Player) {
 
 export class Spear {
   readonly hit = new Set<unknown>();
+  /** Feet of the player when throwing (Infinity = in the air). */
+  throwerFoot = Infinity;
   private g: G;
   private vx: number;
   private vy: number;

@@ -184,6 +184,7 @@ export class Zombie {
     const staggers = (!this.def.heavy || kind === 'high') && this.time >= this.poiseUntil;
     if (staggers && this.state !== 'rising' && this.state !== 'falling') {
       this.setState('hurt');
+      this.aimLow = false;
       this.poiseUntil = this.time + 0.3 + 0.7;
       this.body.setVelocityX(dirX * knockback / (this.def.heavy ? 2 : 1));
     }
@@ -249,6 +250,7 @@ export class Zombie {
           // hit by something it can't see: swing back that way
           this.facing = this.retaliateDir;
           this.retaliateDir = 0;
+          this.aimLow = false;
           this.body.setVelocityX(0);
           this.setState('windup');
           sfx.zombieAttack();
@@ -270,18 +272,22 @@ export class Zombie {
         const onLedge = player.onGround && this.footY - player.footY > 20;
         const inReach = dist <= d.reach * FIG + PLAYER_HALF;
         const angry = this.time < this.angryUntil && onLedge && !player.dead;
-        if (!player.dead && inReach && (Math.abs(player.footY - this.footY) < 140 * FIG || angry) && (!onLedge || this.reachesUp(player))) {
+        const grounded = this.body.blocked.down;
+        if (!player.dead && grounded && inReach && (Math.abs(player.footY - this.footY) < 140 * FIG || angry) && (!onLedge || this.reachesUp(player))) {
           this.body.setVelocityX(0);
           // already crouching when the swing starts: the bigger ones aim low (ducking only dodges a swing begun on a standing player)
           this.aimLow = !lowAttack && !onLedge && player.crouching;
           this.setState('windup');
           sfx.zombieAttack();
-        } else if (angry && !lowAttack && this.size !== 'giant' && dist <= d.reach * FIG + PLAYER_HALF + 20 && this.body.blocked.down) {
+        } else if (angry && !lowAttack && this.size !== 'giant' && dist <= d.reach * FIG + PLAYER_HALF + 20 && grounded) {
           // hit from a ledge and can't reach: crouch, then jump up and strike
           this.body.setVelocityX(0);
           this.aimLow = false;
           this.setState('jumpWind');
           sfx.zombieAttack();
+        } else if (onLedge && inReach && grounded && !player.dead) {
+          // right under a player on a ledge it can't reach: stand and wait instead of shuffling to and fro
+          this.body.setVelocityX(0);
         } else {
           // Occasional lunge to close the distance (not the heavy ones).
           this.lungeCooldown -= dt;
@@ -322,7 +328,10 @@ export class Zombie {
       }
       case 'jumpWind': {
         this.body.setVelocityX(0);
-        if (this.stateT >= 0.4) {
+        if (player.dead || !(player.onGround && this.footY - player.footY > 20)) {
+          // the player came down (or died) during the crouch: no jump
+          this.setState('walk');
+        } else if (this.stateT >= 0.4) {
           // jump just high enough for the strike band to meet the player's middle
           const hb = player.hurtbox();
           const [top, bottom] = d.attackBand.map((v) => v * FIG);
@@ -363,7 +372,9 @@ export class Zombie {
       }
       case 'hurt': {
         this.body.setVelocityX(this.body.velocity.x * 0.86);
-        if (this.stateT >= 0.3) this.setState('walk');
+        // hit during a jump attack: land first, then rest like after any jump
+        if (this.jumped && this.stateT >= 0.3) this.setState(this.body.blocked.down ? 'recover' : 'hurt');
+        else if (this.stateT >= 0.3) this.setState('walk');
         break;
       }
       case 'dying': {

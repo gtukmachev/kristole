@@ -6,11 +6,13 @@ const PORT = 5198;
 const server = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
 let ready = false; server.stdout.on('data', (d) => { if (String(d).includes('Local')) ready = true; });
 for (let i = 0; i < 100 && !ready; i++) await sleep(100);
+if (!ready) { server.kill(); console.error('FAIL vite did not start'); process.exit(1); }
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 let fails = 0;
+try {
 const ok = (cond, msg) => { if (!cond) fails++; console.log((cond ? 'PASS ' : 'FAIL ') + msg); };
 
 /** Fresh level with no other zombies; strikes of the test zombie are logged with "did it touch the player". */
@@ -106,6 +108,11 @@ l = await waitLog(5000);
 ok(l[0]?.hit, `the big one strikes back (${JSON.stringify(l[0])}, ${await states()})`);
 
 ok(errors.length === 0, `no page errors ${errors.join('; ')}`);
-await browser.close();
-server.kill();
+} catch (e) {
+  fails++;
+  console.log('FAIL ' + e.message);
+} finally {
+  await browser.close();
+  server.kill();
+}
 process.exit(fails ? 1 : 0);
