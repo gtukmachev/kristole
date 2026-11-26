@@ -8,5 +8,6 @@
 
 ## Where notes go
 
-- Ideas for the next game version: `plan/vN.md`.
+- Ideas we don't plan to build yet: `plan/ideas.md`, grouped into letter versions (Version A, B, C…), so they don't get mixed up with real version numbers.
+- A version we actually start gets a number: `plan/vN.md` (its ideas move there from `plan/ideas.md`).
 - Publishing & monetization (a separate future phase, brainstorm for now): `publishing/`, one file per topic, index in `publishing/README.md`. Don't mix it with game versions.
