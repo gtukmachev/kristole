@@ -16,7 +16,9 @@
 ```bash
 npm install
 npm run dev        # open http://localhost:5173
-npx vite --host    # same, reachable from a phone / tablet on the same Wi-Fi: http://<computer IP>:5173
+# phones / tablets on the same Wi-Fi: the built game (1.6 MB; the dev server's ~50 files / 22 MB stall on phones)
+npm run device:build   # rebuilds into dist-device/ on every change (keep running)
+npm run device:serve   # http://<computer IP>:4173 — refresh the page after a change
 ```
 
 Phones and tablets: touch controls appear by themselves (`?touch=1` / `?touch=0` force them on / off).
