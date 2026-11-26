@@ -6,16 +6,20 @@
 
 ## Roadmap
 
-- **Game versions** — `plan/vN.md` (current: `plan/v7.md`).
+- **Game versions** — `plan/vN.md` (current: `plan/v8.md` — phones and tablets in the browser).
 - **Future phase: publishing & monetization** (Google Play, App Store, web game portals; legal, money, multiplatform build,
-  phones and touch controls). Not started yet — ideas only, collected in [`publishing/`](publishing/README.md), kept apart from game development.
+  native apps). Not started yet — ideas only, collected in [`publishing/`](publishing/README.md), kept apart from game development.
 
 ## Run locally
 
 ```bash
 npm install
 npm run dev        # open http://localhost:5173
+npx vite --host    # same, reachable from a phone / tablet on the same Wi-Fi: http://<computer IP>:5173
 ```
+
+Phones and tablets: touch controls appear by themselves (`?touch=1` / `?touch=0` force them on / off).
+Tests: `tests/run-all.sh` (builds, runs the Playwright checks, ≤ 4 at a time, prints a summary).
 
 Production build (static files in `dist/`, ready for GitHub Pages later): `npm run build`, preview with `npm run preview`.
 
