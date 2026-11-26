@@ -6,7 +6,7 @@ import { TOP_BAR_Y, TouchInput, emptyTouch, type TouchHost, type TouchOptions, t
 
 /**
  * Simple (v9): no stick, just thumbs, anywhere in the control strip at the bottom.
- *  - hold a finger on the right half: walk right; on the left half: walk left;
+ *  - hold a finger on the right half: walk right; on the left half: walk left (at once, from the touch);
  *  - swipe up: jump; swipe up-and-sideways: jump and flip (towards the walk, or the swipe when standing);
  *  - swipe down: duck and stay down until you jump or walk;
  *  - tap: swing (alternately up / down, or by height: upper half of the strip = up, lower = down);
@@ -100,15 +100,24 @@ export class SimpleControls extends TouchInput {
     }
   }
 
+  /**
+   * Which way to walk. A finger walks from the moment it touches (no waiting to tell a tap from a hold:
+   * a tap just turns you, swings, and makes a tiny step). While a finger already holds the walk,
+   * a new touch from the other hand doesn't turn you: it's a tap or a swipe.
+   */
   private walkDir(): number {
-    let l = false;
-    let r = false;
-    for (const f of this.fingers.values()) {
-      if (f.kind !== 'hold') continue;
-      if (f.x < WIDTH / 2) l = true;
-      else r = true;
-    }
-    return l === r ? 0 : l ? -1 : 1;
+    const side = (kind: Finger['kind']) => {
+      let l = false;
+      let r = false;
+      for (const f of this.fingers.values()) {
+        if (f.kind !== kind) continue;
+        if (f.x < WIDTH / 2) l = true;
+        else r = true;
+      }
+      return l === r ? 0 : l ? -1 : 1;
+    };
+    const held = [...this.fingers.values()].some((f) => f.kind === 'hold');
+    return held ? side('hold') : side('pending');
   }
 
   private swipe(dir: ReturnType<typeof swipeDir>) {
