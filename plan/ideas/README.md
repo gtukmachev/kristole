@@ -11,4 +11,8 @@
 ## Группы
 
 - [A-mobile](A-mobile/README.md) — управление на телефоне и планшете.
-- [B-menu](B-menu/README.md) — меню и управление игрой.
+- [B-menu](B-menu/README.md) — меню и управление игрой (экран «Controls»).
+- [C-upgrades](C-upgrades/README.md) — прокачка и снаряжение.
+- [D-online](D-online/README.md) — игра онлайн (общие рекорды).
+- [E-events](E-events/README.md) — Events и Rewards.
+- [Z-other](Z-other/README.md) — разное.
