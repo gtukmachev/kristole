@@ -554,10 +554,11 @@ export class MapMenuScene extends Phaser.Scene {
       { label: 'Weapon', act: () => this.scene.start('Weapon', { chapter: this.heroTarget, from: 'menu' }) },
       { label: 'Leaderboard', act: () => this.scene.start('Leaderboard') },
       { label: 'Perks', act: () => this.scene.start('Perks', { from: 'menu' }) },
+      { label: 'Controls', act: () => this.scene.start('Controls', { from: 'menu' }) },
       { label: 'Events', off: true, act: () => this.say('Coming soon!') },
       { label: 'Rewards', off: true, act: () => this.say('Coming soon!') },
     ];
-    const bw = 150, bh = 42, gap = 14;
+    const bw = 140, bh = 42, gap = 10;
     const x0 = WIDTH / 2 - ((bw + gap) * defs.length - gap) / 2;
     const frame = this.add.graphics().setDepth(11);
     const items: NavItem[] = defs.map((d, i) => {

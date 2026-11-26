@@ -1,16 +1,14 @@
 import Phaser from 'phaser';
 import { HEIGHT, INK, PAPER, WIDTH } from './constants';
-import { handsSwapped } from './touch';
+import { TOP_BAR_Y, TouchInput, emptyTouch, type TouchState } from './TouchInput';
 
 /**
- * On-screen controls for phones and tablets.
+ * Joystick 1 (v8): on-screen controls for phones and tablets.
  *  - one side: a floating stick (it appears where the thumb lands): sideways = walk, down = duck, up = jump;
  *  - the other side: two swing buttons one above the other at the edge (top = swing up, bottom = swing down)
  *    and the block button further in. Each owns a whole zone: the upper / lower part of the edge strip,
- *    everything between it and the middle of the screen is block — hard to miss;
- *  - taps on the perk bar switch a perk on, the pause button pauses.
- * Listens to the whole window, not just the canvas: on a wide phone the thumbs rest on the black bars
- * at the sides of the game picture.
+ *    everything between it and the middle of the screen is block — hard to miss.
+ * Pause button and perk bar: see TouchInput.
  */
 
 const STICK_R = 60; // how far the knob travels (smaller = less thumb waving)
@@ -33,30 +31,7 @@ const BUTTONS = [
 ] as const;
 type ButtonId = (typeof BUTTONS)[number]['id'];
 
-export interface TouchHost {
-  /** Perk bar slot centre (screen space) and how many slots. */
-  perkSlot(i: number): { x: number; y: number };
-  perkSlots: number;
-  onPerk(i: number): void;
-  onPause(): void;
-  /** Pause button centre (screen space). */
-  pauseAt: { x: number; y: number };
-}
-
-export interface TouchState {
-  left: boolean;
-  right: boolean;
-  down: boolean;
-  up: boolean;
-  jumpPressed: boolean;
-  swingHigh: boolean;
-  swingLow: boolean;
-  block: boolean;
-}
-
-export class TouchControls {
-  private g: Phaser.GameObjects.Graphics;
-  private swap = handsSwapped();
+export class JoystickControls extends TouchInput {
   private stick: { id: number; bx: number; by: number; x: number; y: number } | null = null;
   private held = new Map<number, ButtonId>();
   private swings: ButtonId[] = [];
@@ -67,34 +42,10 @@ export class TouchControls {
   /** Lowest thumb point since re-arming (null = from rest: first jump). */
   private troughDy: number | null = null;
   private flash = new Map<ButtonId, number>();
-  private off: () => void;
-
-  constructor(private scene: Phaser.Scene, private host: TouchHost) {
-    this.g = scene.add.graphics().setDepth(150).setScrollFactor(0);
-    const down = (e: PointerEvent) => this.down(e);
-    const move = (e: PointerEvent) => this.move(e);
-    const up = (e: PointerEvent) => this.up(e);
-    window.addEventListener('pointerdown', down);
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-    this.off = () => {
-      window.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-    };
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
-  }
-
-  destroy() {
-    this.off();
-    this.g.destroy();
-  }
 
   /** Let go of everything (pause, resume, the level ends). */
-  reset() {
-    this.swap = handsSwapped();
+  override reset() {
+    super.reset();
     this.stick = null;
     this.held.clear();
     this.swings = [];
@@ -102,25 +53,10 @@ export class TouchControls {
     this.troughDy = null;
   }
 
-  /** Mirror x when the hands are swapped. */
-  private mx(x: number) {
-    return this.swap ? WIDTH - x : x;
-  }
-
-  /** Window point -> game screen coordinates (may be outside 0…WIDTH on the black bars). */
-  private toGame(e: PointerEvent) {
-    const r = this.scene.game.canvas.getBoundingClientRect();
-    return { x: ((e.clientX - r.left) * WIDTH) / r.width, y: ((e.clientY - r.top) * HEIGHT) / r.height };
-  }
-
-  private active() {
-    return this.scene.sys.isActive();
-  }
-
   /** Which fight button owns this point (a zone, not just the circle). */
   private zoneAt(x: number, y: number): ButtonId | null {
     const fx = this.mx(x);
-    if (y < 135 || fx < WIDTH / 2) return null;
+    if (y < TOP_BAR_Y || fx < WIDTH / 2) return null;
     if (fx >= SWING_X) return y < SWING_SPLIT_Y ? 'high' : 'low';
     return 'block';
   }
@@ -130,44 +66,22 @@ export class TouchControls {
     this.flash.set(id, this.scene.time.now);
   }
 
-  private down(e: PointerEvent) {
-    if (e.pointerType !== 'touch' || !this.active()) return;
-    const { x, y } = this.toGame(e);
-    const h = this.host;
-    // pause button (top right)
-    if (Math.hypot(x - h.pauseAt.x, y - h.pauseAt.y) < 52) {
-      this.reset();
-      h.onPause();
-      return;
-    }
-    // perk bar (top middle)
-    if (y < 135) {
-      for (let i = 0; i < h.perkSlots; i++) {
-        const s = h.perkSlot(i);
-        if (Math.abs(x - s.x) < 24 && Math.abs(y - s.y) < 42) {
-          h.onPerk(i);
-          return;
-        }
-      }
-      return;
-    }
+  protected onDown(id: number, { x, y }: { x: number; y: number }) {
     const stickSide = this.swap ? x > WIDTH / 2 : x < WIDTH / 2;
     if (stickSide) {
       if (this.stick) return;
-      this.stick = { id: e.pointerId, bx: x, by: y, x, y };
+      this.stick = { id, bx: x, by: y, x, y };
       return;
     }
     const b = this.zoneAt(x, y);
     if (!b) return;
-    this.held.set(e.pointerId, b);
+    this.held.set(id, b);
     this.press(b);
   }
 
-  private move(e: PointerEvent) {
-    if (e.pointerType !== 'touch') return;
-    const { x, y } = this.toGame(e);
+  protected onMove(id: number, { x, y }: { x: number; y: number }) {
     const s = this.stick;
-    if (s && s.id === e.pointerId) {
+    if (s && s.id === id) {
       s.x = x;
       s.y = y;
       // pulled past the edge sideways or down: the stick follows the thumb. Not up: then the second
@@ -179,25 +93,24 @@ export class TouchControls {
       return;
     }
     // sliding the thumb from one button onto another presses that one
-    const was = this.held.get(e.pointerId);
+    const was = this.held.get(id);
     if (was) {
       const b = this.zoneAt(x, y);
       if (b && b !== was) {
-        this.held.set(e.pointerId, b);
+        this.held.set(id, b);
         this.press(b);
       }
     }
   }
 
-  private up(e: PointerEvent) {
-    if (e.pointerType !== 'touch') return;
-    if (this.stick?.id === e.pointerId) this.stick = null;
-    this.held.delete(e.pointerId);
+  protected onUp(id: number) {
+    if (this.stick?.id === id) this.stick = null;
+    this.held.delete(id);
   }
 
   /** What the fingers say this frame. Swing presses are handed out once. */
   read(): TouchState {
-    const st: TouchState = { left: false, right: false, down: false, up: false, jumpPressed: false, swingHigh: false, swingLow: false, block: false };
+    const st: TouchState = emptyTouch();
     const s = this.stick;
     if (s) {
       const dx = s.x - s.bx;

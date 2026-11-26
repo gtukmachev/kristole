@@ -3,7 +3,7 @@ import { menuScene } from '../game/menuChoice';
 import { FONT_IMPACT, FONT_SLAB, HEIGHT, INK, PAPER, WIDTH, hex } from '../game/constants';
 import { sfx } from '../game/sfx';
 import { GridNav } from '../game/ui';
-import { handsSwapped, isTouch, setHandsSwapped } from '../game/touch';
+import { isTouch } from '../game/touch';
 
 export class PauseScene extends Phaser.Scene {
   constructor() {
@@ -16,13 +16,12 @@ export class PauseScene extends Phaser.Scene {
     g.fillRect(0, 0, WIDTH, HEIGHT);
     this.add.text(WIDTH / 2, 170, 'PAUSED', { fontFamily: FONT_IMPACT, fontSize: '96px', color: hex(INK) }).setOrigin(0.5);
     const soundLabel = () => (sfx.muted ? 'Sound: off' : 'Sound: on');
-    const handsLabel = () => (handsSwapped() ? 'Stick: right hand' : 'Stick: left hand');
     const items = [
       { label: 'Resume', act: () => this.resume() },
       { label: 'Restart level', act: () => this.restart() },
       { label: 'Perks', act: () => this.perks() },
       { label: soundLabel(), act: () => { sfx.toggleMute(); texts[3].setText(soundLabel()); } },
-      ...(isTouch() ? [{ label: handsLabel(), act: () => { setHandsSwapped(!handsSwapped()); texts[4].setText(handsLabel()); } }] : []),
+      { label: 'Controls', act: () => this.controls() },
       { label: 'Main menu', act: () => this.toMenu() },
     ];
     const actions = items.map((it) => it.act);
@@ -55,6 +54,11 @@ export class PauseScene extends Phaser.Scene {
     if (!isTouch()) this.add.text(WIDTH / 2, HEIGHT - 50, '← →  move  ·  ↑ / Space  jump, again in air = flip  ·  ↓  duck  ·  W  swing up  ·  S  swing down  ·  A / D  block  ·  1…0  perks  ·  M  sound', {
       fontFamily: FONT_SLAB, fontSize: '18px', color: hex(INK),
     }).setOrigin(0.5);
+  }
+
+  private controls() {
+    this.scene.stop();
+    this.scene.launch('Controls', { from: 'pause' });
   }
 
   private resume() {

@@ -10,6 +10,8 @@ import { GameScene } from './scenes/GameScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
 import { PerksScene } from './scenes/PerksScene';
+import { ControlsScene } from './scenes/ControlsScene';
+import { PracticeScene } from './scenes/PracticeScene';
 import { installKeyDebug } from './keyDebug';
 import { storage } from './game/storage';
 import { setupMobile } from './game/mobile';
@@ -27,7 +29,7 @@ const game = new Phaser.Game({
   antialias: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 2000 }, debug: false } },
-  scene: [BootScene, MapMenuScene, MenuScene, WeaponScene, AvatarScene, LeaderboardScene, GameScene, PauseScene, ResultScene, PerksScene],
+  scene: [BootScene, MapMenuScene, MenuScene, WeaponScene, AvatarScene, LeaderboardScene, GameScene, PauseScene, ResultScene, PerksScene, ControlsScene, PracticeScene],
 });
 
 (window as unknown as { __kristole: Phaser.Game }).__kristole = game;

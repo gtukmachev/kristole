@@ -8,7 +8,10 @@ import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId 
 import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
 import { SECRETS, Secret, autoSecrets } from '../game/secrets';
 import { keyLog } from '../keyDebug';
-import { TouchControls } from '../game/TouchControls';
+import { currentScheme, type SchemeId } from '../game/controls';
+import type { TouchInput } from '../game/TouchInput';
+import { createTouch } from '../game/touchSchemes';
+import { keyboardInput, mergeTouch, type GameKeys } from '../game/keyInput';
 import { hint as keyHint, isTouch } from '../game/touch';
 import type { AmbientMode } from '../game/ambient';
 import { drawBackground, groundKey } from '../game/background';
@@ -136,7 +139,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
   /** Perk slots pressed since the last frame (by physical key, so any layout and the numpad work). */
   private perkPresses: number[] = [];
   /** Phones and tablets: the stick and the fight buttons. */
-  private touch?: TouchControls;
+  private touch?: TouchInput;
+  private touchScheme?: SchemeId;
   // ---- v5: badminton shuttlecocks and the helicopter of the army base
   private shuttles: { g: Phaser.GameObjects.Graphics; x: number; y: number; vx: number; vy: number; dmg: number; dir: number }[] = [];
   private heli?: { g: Phaser.GameObjects.Graphics; x: number; dir: number; t: number };
@@ -275,15 +279,7 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }).setDepth(56);
 
     this.createHud();
-    if (isTouch()) {
-      this.touch = new TouchControls(this, {
-        perkSlot: (i) => this.perkBar.slotPos(i),
-        perkSlots: PERKS.length,
-        onPerk: (i) => this.perkPresses.push(i),
-        onPause: () => this.openPause(),
-        pauseAt: PAUSE_BTN,
-      });
-    }
+    this.makeTouch();
     for (const d of SECRETS[this.place.id] ?? (this.isCamp || this.chapter < 3 ? [] : autoSecrets(this.place, this.chapter))) {
       this.secrets.push(new Secret(this, d, (x, y) => {
         this.dustAt(x, y, 8);
@@ -304,7 +300,9 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
       // Don't let keys that were held while paused leak into the game.
       kb.resetKeys();
       this.perkPresses = [];
-      this.touch?.reset();
+      // the scheme may have been changed on the Controls screen (from the pause menu)
+      if (this.touchScheme !== currentScheme()) this.makeTouch();
+      else this.touch?.reset();
     });
 
     sfx.playMusic('game');
@@ -419,28 +417,8 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     for (const i of this.perkPresses.splice(0)) this.activatePerk(i);
     this.updatePerks(realDt);
 
-    const input: PlayerInput = {
-      // Arrows (+ Space) move, WASD fights: W / S swing, A / D guard.
-      left: k.left.isDown,
-      right: k.right.isDown,
-      down: k.down.isDown,
-      jumpPressed: JD(k.up) || JD(k.space),
-      swingHigh: JD(k.w),
-      swingLow: JD(k.s),
-      block: k.a.isDown || k.d.isDown,
-      up: k.up.isDown || k.space.isDown,
-    };
-    if (this.touch) {
-      const t = this.touch.read();
-      input.left ||= t.left;
-      input.right ||= t.right;
-      input.down ||= t.down;
-      input.up ||= t.up;
-      input.jumpPressed ||= t.jumpPressed;
-      input.swingHigh ||= t.swingHigh;
-      input.swingLow ||= t.swingLow;
-      input.block ||= t.block;
-    }
+    const input: PlayerInput = keyboardInput(this.keys as GameKeys);
+    if (this.touch) mergeTouch(input, this.touch.read());
     if (this.phase === 'over' || this.phase === 'enter') {
       input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
       if (this.phase === 'enter') input.right = this.player.x < ARENA_LEFT + 200;
@@ -517,7 +495,22 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     }
   }
 
-  /** Pause button, top right (taps go through TouchControls, the mouse clicks it here). */
+  /** On-screen controls of the chosen scheme (phones and tablets only; the keyboard always works). */
+  private makeTouch() {
+    this.touch?.destroy();
+    this.touch = undefined;
+    this.touchScheme = currentScheme();
+    if (!isTouch()) return;
+    this.touch = createTouch(this, {
+      perkSlot: (i) => this.perkBar.slotPos(i),
+      perkSlots: PERKS.length,
+      onPerk: (i) => this.perkPresses.push(i),
+      onPause: () => this.openPause(),
+      pauseAt: PAUSE_BTN,
+    }, this.touchScheme);
+  }
+
+  /** Pause button, top right (taps go through the touch controls, the mouse clicks it here). */
   private drawPauseButton() {
     const { x, y } = PAUSE_BTN;
     const g = this.add.graphics().setDepth(100).setScrollFactor(0);
