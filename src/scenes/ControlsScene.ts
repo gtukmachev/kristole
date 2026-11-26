@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { FONT_IMPACT, FONT_SLAB, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH, hex } from '../game/constants';
-import { SCHEMES, currentScheme, schemeAvailable, setScheme } from '../game/controls';
+import { SCHEMES, currentScheme, schemeAvailable, setScheme, setSimpleSwing, simpleSwing } from '../game/controls';
 import { menuScene } from '../game/menuChoice';
 import { sfx } from '../game/sfx';
 import { handsSwapped, setHandsSwapped } from '../game/touch';
@@ -114,6 +114,19 @@ export class ControlsScene extends Phaser.Scene {
         setHandsSwapped(!handsSwapped());
         t.setText(label());
         this.practice.handsChanged();
+      });
+      this.hands = t;
+    }
+    // Simple: what a tap swings
+    if (s.id === 'simple') {
+      const label = () => (simpleSwing() === 'height' ? 'Swings: by height  ⇄' : 'Swings: up, down in turn  ⇄');
+      const t = this.add.text(WIDTH / 2, HEADER_H + 26, label(), {
+        fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '24px', color: hex(INK), backgroundColor: '#ffffff', padding: { x: 14, y: 6 },
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      t.on('pointerup', () => {
+        sfx.click();
+        setSimpleSwing(simpleSwing() === 'height' ? 'alternate' : 'height');
+        t.setText(label());
       });
       this.hands = t;
     }

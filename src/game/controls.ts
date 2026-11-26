@@ -17,6 +17,7 @@ export interface SchemeDef {
 export const SCHEMES: SchemeDef[] = [
   { id: 'keyboard', title: 'Keyboard' },
   { id: 'joy1', title: 'Joystick 1', hands: true },
+  { id: 'simple', title: 'Simple' },
   { id: 'joy2', title: 'Joystick 2', hands: true },
 ];
 
@@ -60,4 +61,16 @@ export function setScheme(id: SchemeId) {
 /** Can this scheme be chosen here? (The keyboard is for computers.) */
 export function schemeAvailable(id: SchemeId): boolean {
   return id !== 'keyboard' || !isTouch();
+}
+
+/** Simple scheme: what a tap swings — alternately up and down, or by the height of the tap. */
+export type SimpleSwing = 'alternate' | 'height';
+const SWING_KEY = 'kristole.simpleSwing';
+
+export function simpleSwing(): SimpleSwing {
+  return get(SWING_KEY) === 'height' ? 'height' : 'alternate';
+}
+
+export function setSimpleSwing(v: SimpleSwing) {
+  set(SWING_KEY, v);
 }
