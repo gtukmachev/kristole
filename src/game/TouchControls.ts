@@ -99,6 +99,8 @@ export class JoystickControls extends TouchInput {
       s.y = y;
       // pulled past the edge sideways or down: the stick follows the thumb. Not up: then the second
       // push (flip) would need the thumb to travel all the way back first.
+      // Joystick 2: the rings stay where they appeared — the outer ring must be reachable by moving the thumb.
+      if (this.rings === 2) return;
       const dx = x - s.bx;
       const dy = y - s.by;
       if (Math.abs(dx) > STICK_R) s.bx = x - Math.sign(dx) * STICK_R;
