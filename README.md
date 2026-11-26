@@ -6,7 +6,7 @@
 
 ## Roadmap
 
-- **Game versions** — `plan/vN.md` (latest: `plan/v8.md` — phones and tablets in the browser).
+- **Game versions** — `plan/vN.md` (latest: `plan/v8.md` — phones and tablets in the browser; in progress: `plan/v9.md` — the Controls screen).
 - **Ideas for later** — `plan/ideas/`, one folder per group (letter + short topic, e.g. `A-mobile`) until we decide to build one.
 - **Future phase: publishing & monetization** (Google Play, App Store, web game portals; legal, money, multiplatform build,
   native apps). Not started yet — ideas only, collected in [`publishing/`](publishing/README.md), kept apart from game development.
