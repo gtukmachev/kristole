@@ -48,10 +48,10 @@ export abstract class TouchInput {
     this.g = scene.add.graphics().setDepth(150).setScrollFactor(opts.inWorld ? 1 : 0);
     const down = (e: PointerEvent) => this.down(e);
     const move = (e: PointerEvent) => {
-      if (e.pointerType === 'touch') this.onMove(e.pointerId, this.toGame(e));
+      if (this.accepts(e)) this.onMove(e.pointerId, this.toGame(e));
     };
     const up = (e: PointerEvent) => {
-      if (e.pointerType === 'touch') this.onUp(e.pointerId, this.toGame(e));
+      if (this.accepts(e)) this.onUp(e.pointerId, this.toGame(e));
     };
     window.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
@@ -88,7 +88,7 @@ export abstract class TouchInput {
   }
 
   private down(e: PointerEvent) {
-    if (e.pointerType !== 'touch' || !this.scene.sys.isActive()) return;
+    if (!this.accepts(e) || !this.scene.sys.isActive()) return;
     const { x, y } = this.toGame(e);
     const h = this.host;
     // pause button (top right)
@@ -109,6 +109,15 @@ export abstract class TouchInput {
       return;
     }
     this.onDown(e.pointerId, { x, y });
+  }
+
+  /** Fingers only; the layout editor takes the mouse too (to try it on a computer). */
+  protected acceptsMouse() {
+    return false;
+  }
+
+  private accepts(e: PointerEvent) {
+    return e.pointerType === 'touch' || (this.acceptsMouse() && e.pointerType === 'mouse');
   }
 
   protected abstract onDown(id: number, p: { x: number; y: number }): void;

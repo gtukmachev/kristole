@@ -17,6 +17,9 @@ check(!inOuterUp(0, R * 1.5, R, false), 'down: not outer');
 check(inOuterUp(0, -R * 1.1, R, true), 'eased back a little: still outer (no flicker)');
 check(!inOuterUp(0, -R * 0.9, R, true), 'back in the inner ring: left the outer');
 
+check(!inOuterUp(0, -R * 1.4, R, false, 2.6) && inOuterUp(0, -R * 1.5, R, false, 2.6), 'bigger outer ring starts further out');
+check(inOuterUp(0, -R * 1.2, R, false, 1.5), 'smaller outer ring starts closer');
+
 // ---- Simple: swipes
 check(swipeDir(0, -100) === 'up', 'swipe straight up = up');
 check(swipeDir(30, -100) === 'up', 'swipe up, a little off = up');

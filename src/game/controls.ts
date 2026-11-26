@@ -74,3 +74,82 @@ export function simpleSwing(): SimpleSwing {
 export function setSimpleSwing(v: SimpleSwing) {
   set(SWING_KEY, v);
 }
+
+/**
+ * Joystick layout (v9): stick size, the outer ring (Joystick 2), "under the finger" or a fixed place,
+ * and where the fight buttons are and how big. Kept per scheme, for the right hand
+ * (the stick on the left); swapped hands mirror it.
+ */
+export interface Spot {
+  x: number;
+  y: number;
+}
+export interface ButtonSpot extends Spot {
+  r: number;
+}
+export type FightButton = 'high' | 'low' | 'block';
+export interface JoyLayout {
+  /** How far the knob travels (the inner ring). */
+  stickR: number;
+  /** Outer ring radius, × stickR (Joystick 2). */
+  outerK: number;
+  /** The stick stays in one place (else it appears under the finger). */
+  fixed: boolean;
+  /** Where the stick is drawn at rest / stays when fixed. */
+  stick: Spot;
+  buttons: Record<FightButton, ButtonSpot>;
+}
+
+export const LAYOUT_LIMITS = {
+  stickR: [36, 110, 6],
+  outerK: [1.5, 2.6, 0.1],
+  buttonR: [40, 110, 6],
+} as const;
+
+export function defaultLayout(): JoyLayout {
+  return {
+    stickR: 60,
+    outerK: 1.9,
+    fixed: false,
+    stick: { x: 190, y: 585 },
+    buttons: {
+      high: { x: 1188, y: 450, r: 64 },
+      low: { x: 1188, y: 615, r: 64 },
+      block: { x: 1010, y: 615, r: 64 },
+    },
+  };
+}
+
+const layoutKey = (id: SchemeId) => `kristole.layout.${id}`;
+
+export function joyLayout(id: SchemeId): JoyLayout {
+  const d = defaultLayout();
+  try {
+    const raw = get(layoutKey(id));
+    if (!raw) return d;
+    const v = JSON.parse(raw) as Partial<JoyLayout>;
+    return {
+      ...d,
+      ...v,
+      stick: { ...d.stick, ...v.stick },
+      buttons: {
+        high: { ...d.buttons.high, ...v.buttons?.high },
+        low: { ...d.buttons.low, ...v.buttons?.low },
+        block: { ...d.buttons.block, ...v.buttons?.block },
+      },
+    };
+  } catch {
+    return d;
+  }
+}
+
+export function setJoyLayout(id: SchemeId, l: JoyLayout | null) {
+  if (l) set(layoutKey(id), JSON.stringify(l));
+  else {
+    try {
+      window.localStorage.removeItem(layoutKey(id));
+    } catch {
+      /* ignore */
+    }
+  }
+}

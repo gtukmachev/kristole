@@ -10,10 +10,14 @@ export const OUTER_OUT = 1.0;
 /** How far the knob may go into the outer ring (× stick travel). */
 export const OUTER_MAX = 1.9;
 
-/** Is the thumb in the upper part of the outer ring? `wasIn` = it was there last frame. */
-export function inOuterUp(dx: number, dy: number, travel: number, wasIn: boolean): boolean {
+/**
+ * Is the thumb in the upper part of the outer ring? `wasIn` = it was there last frame.
+ * `outerK` = outer ring size (× travel): a bigger ring starts a little further out.
+ */
+export function inOuterUp(dx: number, dy: number, travel: number, wasIn: boolean, outerK = OUTER_MAX): boolean {
   if (wasIn) return dy < -travel * OUTER_OUT;
-  return dy < -travel * OUTER_IN && -dy > Math.abs(dx) * 0.8;
+  const start = 1 + (OUTER_IN - 1) * ((outerK - 1) / (OUTER_MAX - 1));
+  return dy < -travel * start && -dy > Math.abs(dx) * 0.8;
 }
 
 // ---- Simple scheme: taps, holds and swipes anywhere (sizes in centimetres of the real screen)

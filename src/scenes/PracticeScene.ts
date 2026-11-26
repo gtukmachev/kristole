@@ -37,6 +37,12 @@ export class PracticeScene extends Phaser.Scene implements PlayerHost {
   private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Sliding out or in: no input. */
   sliding = false;
+  /** The Controls screen is editing the joystick layout: the hero waits. */
+  editing = false;
+
+  get touchControls() {
+    return this.touch;
+  }
 
   constructor() {
     super('Practice');
@@ -49,6 +55,7 @@ export class PracticeScene extends Phaser.Scene implements PlayerHost {
     this.dummy = undefined;
     this.touch = undefined;
     this.sliding = false;
+    this.editing = false;
   }
 
   create() {
@@ -176,7 +183,7 @@ export class PracticeScene extends Phaser.Scene implements PlayerHost {
     this.touch?.draw();
     const input = keyboardInput(this.keys);
     if (this.touch) mergeTouch(input, this.touch.read());
-    if (this.sliding) input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
+    if (this.sliding || this.editing) input.left = input.right = input.down = input.jumpPressed = input.swingHigh = input.swingLow = input.block = false;
     p.update(dt, input);
     this.dummy?.update(dt, p.x);
   }

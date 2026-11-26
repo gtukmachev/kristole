@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { FONT_IMPACT, FONT_SLAB, INK, INK_FAINT, INK_SOFT, PAPER, WIDTH, hex } from '../game/constants';
-import { SCHEMES, currentScheme, schemeAvailable, setScheme, setSimpleSwing, simpleSwing } from '../game/controls';
+import { SCHEMES, type SchemeId, currentScheme, schemeAvailable, setScheme, setSimpleSwing, simpleSwing } from '../game/controls';
 import { menuScene } from '../game/menuChoice';
 import { sfx } from '../game/sfx';
 import { handsSwapped, setHandsSwapped } from '../game/touch';
+import { JoystickControls } from '../game/TouchControls';
 import type { PracticeScene } from './PracticeScene';
 
 /**
@@ -27,7 +28,8 @@ export class ControlsScene extends Phaser.Scene {
   private title!: Phaser.GameObjects.Text;
   private arrows!: Phaser.GameObjects.Text[];
   private okG!: Phaser.GameObjects.Graphics;
-  private hands?: Phaser.GameObjects.Text;
+  private row: Phaser.GameObjects.Text[] = [];
+  private editing = false;
   private busy = false;
 
   constructor() {
@@ -38,10 +40,12 @@ export class ControlsScene extends Phaser.Scene {
     this.from = data?.from ?? 'menu';
     this.idx = Math.max(0, SCHEMES.findIndex((s) => s.id === currentScheme()));
     this.busy = false;
+    this.editing = false;
+    this.row = [];
   }
 
   create() {
-    this.scene.launch('Practice', { scheme: SCHEMES[this.idx].id });
+    this.launchPractice({ scheme: SCHEMES[this.idx].id });
     this.scene.bringToTop();
 
     const bar = this.add.graphics();
@@ -90,6 +94,12 @@ export class ControlsScene extends Phaser.Scene {
     this.refresh();
   }
 
+  /** Start the practice ground; the settings row needs its controls, so it is rebuilt once they exist. */
+  private launchPractice(data: { scheme: SchemeId; from?: number }) {
+    this.scene.get('Practice').events.once(Phaser.Scenes.Events.CREATE, () => this.buildRow());
+    this.scene.launch('Practice', data);
+  }
+
   private get practice() {
     return this.scene.get('Practice') as PracticeScene;
   }
@@ -101,35 +111,94 @@ export class ControlsScene extends Phaser.Scene {
     this.arrows[0].setAlpha(this.idx > 0 ? 1 : 0.2);
     this.arrows[1].setAlpha(this.idx < SCHEMES.length - 1 ? 1 : 0.2);
     this.drawOk(s.id === currentScheme(), live);
-    // left / right hand: joystick schemes only
-    this.hands?.destroy();
-    this.hands = undefined;
+    this.buildRow();
+  }
+
+  /** A small white button in the row under the header. */
+  private chip(label: string, onTap: (t: Phaser.GameObjects.Text) => void, size = 24) {
+    const t = this.add.text(0, HEADER_H + 26, label, {
+      fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: `${size}px`, color: hex(INK), backgroundColor: '#ffffff', padding: { x: 14, y: 6 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    t.on('pointerup', () => {
+      sfx.click();
+      onTap(t);
+    });
+    this.row.push(t);
+    return t;
+  }
+
+  /** Lay the row out centred, with gaps. */
+  private placeRow() {
+    const gap = 16;
+    const w = this.row.reduce((a, t) => a + t.width, 0) + gap * (this.row.length - 1);
+    let x = WIDTH / 2 - w / 2;
+    for (const t of this.row) {
+      t.setX(x + t.width / 2);
+      x += t.width + gap;
+    }
+  }
+
+  /** The settings row under the header (hands, layout editor, Simple's swings). */
+  private buildRow() {
+    for (const t of this.row) t.destroy();
+    this.row = [];
+    const s = SCHEMES[this.idx];
+    const joy = this.joystick;
+    if (this.editing && joy) {
+      // editing the layout: sizes, reset, done
+      const step = (label: string, what: 'stick' | 'outer' | 'button') => {
+        this.chip(`${label}  −`, () => joy.resize(what, -1), 22);
+        this.chip('+', () => joy.resize(what, 1), 22);
+      };
+      step(s.id === 'joy2' ? 'Inner ring' : 'Stick', 'stick');
+      if (s.id === 'joy2') step('Outer ring', 'outer');
+      step('Buttons', 'button');
+      this.chip('Reset', () => joy.resetLayout(), 22);
+      this.chip('Done ✓', () => this.setEditing(false), 22);
+      this.placeRow();
+      return;
+    }
     if (s.hands) {
-      const label = () => (handsSwapped() ? 'Stick: right hand  ⇄' : 'Stick: left hand  ⇄');
-      const t = this.add.text(WIDTH / 2, HEADER_H + 26, label(), {
-        fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '24px', color: hex(INK), backgroundColor: '#ffffff', padding: { x: 14, y: 6 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      t.on('pointerup', () => {
-        sfx.click();
+      const label = () => (handsSwapped() ? 'Stick: right hand ⇄' : 'Stick: left hand ⇄');
+      this.chip(label(), (t) => {
         setHandsSwapped(!handsSwapped());
         t.setText(label());
         this.practice.handsChanged();
+        this.placeRow();
       });
-      this.hands = t;
     }
+    if (s.id === 'joy2' && joy) {
+      const label = () => (joy.layout.fixed ? 'Stick: stays in place ⇄' : 'Stick: under the finger ⇄');
+      this.chip(label(), (t) => {
+        joy.setFixed(!joy.layout.fixed);
+        t.setText(label());
+        this.placeRow();
+      });
+    }
+    if (joy) this.chip('Edit layout ✎', () => this.setEditing(true));
     // Simple: what a tap swings
     if (s.id === 'simple') {
-      const label = () => (simpleSwing() === 'height' ? 'Swings: by height  ⇄' : 'Swings: up, down in turn  ⇄');
-      const t = this.add.text(WIDTH / 2, HEADER_H + 26, label(), {
-        fontFamily: FONT_SLAB, fontStyle: 'bold', fontSize: '24px', color: hex(INK), backgroundColor: '#ffffff', padding: { x: 14, y: 6 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      t.on('pointerup', () => {
-        sfx.click();
+      const label = () => (simpleSwing() === 'height' ? 'Swings: by height ⇄' : 'Swings: up, down in turn ⇄');
+      this.chip(label(), (t) => {
         setSimpleSwing(simpleSwing() === 'height' ? 'alternate' : 'height');
         t.setText(label());
+        this.placeRow();
       });
-      this.hands = t;
     }
+    this.placeRow();
+  }
+
+  /** The joystick on the practice ground (Joystick 1 / 2 screens). */
+  private get joystick(): JoystickControls | undefined {
+    const t = (this.scene.get('Practice') as PracticeScene).touchControls;
+    return t instanceof JoystickControls ? t : undefined;
+  }
+
+  private setEditing(on: boolean) {
+    this.editing = on;
+    this.joystick?.setEditing(on);
+    this.practice.editing = on;
+    this.buildRow();
   }
 
   private drawOk(filled: boolean, live: boolean) {
@@ -154,13 +223,14 @@ export class ControlsScene extends Phaser.Scene {
   /** Flip to the next (1) or previous (-1) scheme: the practice ground slides away, the next one slides in. */
   private go(d: number) {
     const to = this.idx + d;
+    if (this.editing) this.setEditing(false);
     if (this.busy || to < 0 || to >= SCHEMES.length) return;
     this.busy = true;
     sfx.click();
     this.practice.slideOut(d, () => {
       this.idx = to;
       this.scene.stop('Practice');
-      this.scene.launch('Practice', { scheme: SCHEMES[to].id, from: d });
+      this.launchPractice({ scheme: SCHEMES[to].id, from: d });
       this.scene.bringToTop();
       this.refresh();
       this.busy = false;
