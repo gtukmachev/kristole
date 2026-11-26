@@ -7,7 +7,9 @@ import type { TouchHost, TouchInput, TouchOptions } from './TouchInput';
 export function createTouch(scene: Phaser.Scene, host: TouchHost, scheme: SchemeId, opts: TouchOptions = {}): TouchInput | undefined {
   switch (scheme) {
     case 'joy1':
-      return new JoystickControls(scene, host, opts);
+      return new JoystickControls(scene, host, 1, opts);
+    case 'joy2':
+      return new JoystickControls(scene, host, 2, opts);
     default:
       return undefined;
   }

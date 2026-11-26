@@ -17,6 +17,7 @@ export interface SchemeDef {
 export const SCHEMES: SchemeDef[] = [
   { id: 'keyboard', title: 'Keyboard' },
   { id: 'joy1', title: 'Joystick 1', hands: true },
+  { id: 'joy2', title: 'Joystick 2', hands: true },
 ];
 
 const KEY = 'kristole.controls';

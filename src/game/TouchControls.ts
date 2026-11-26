@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { HEIGHT, INK, PAPER, WIDTH } from './constants';
-import { TOP_BAR_Y, TouchInput, emptyTouch, type TouchState } from './TouchInput';
+import { OUTER_MAX, inOuterUp } from './gestures';
+import { TOP_BAR_Y, TouchInput, emptyTouch, type TouchHost, type TouchOptions, type TouchState } from './TouchInput';
 
 /**
  * Joystick 1 (v8): on-screen controls for phones and tablets.
@@ -8,6 +9,8 @@ import { TOP_BAR_Y, TouchInput, emptyTouch, type TouchState } from './TouchInput
  *  - the other side: two swing buttons one above the other at the edge (top = swing up, bottom = swing down)
  *    and the block button further in. Each owns a whole zone: the upper / lower part of the edge strip,
  *    everything between it and the middle of the screen is block — hard to miss.
+ * Joystick 2 (v9): the same, plus an outer ring around the stick. Thumb up into the outer ring = a second
+ * jump (flip in the air, wall bounce); back to the inner ring and up again = another one. The ring lights up.
  * Pause button and perk bar: see TouchInput.
  */
 
@@ -32,6 +35,14 @@ const BUTTONS = [
 type ButtonId = (typeof BUTTONS)[number]['id'];
 
 export class JoystickControls extends TouchInput {
+  /** Joystick 2: thumb in the outer ring (upper part) / a flip waiting for the next frame. */
+  private inOuter = false;
+  private pendingJump = false;
+
+  constructor(scene: Phaser.Scene, host: TouchHost, private rings: 1 | 2 = 1, opts: TouchOptions = {}) {
+    super(scene, host, opts);
+  }
+
   private stick: { id: number; bx: number; by: number; x: number; y: number } | null = null;
   private held = new Map<number, ButtonId>();
   private swings: ButtonId[] = [];
@@ -51,6 +62,8 @@ export class JoystickControls extends TouchInput {
     this.swings = [];
     this.armed = true;
     this.troughDy = null;
+    this.inOuter = false;
+    this.pendingJump = false;
   }
 
   /** Which fight button owns this point (a zone, not just the circle). */
@@ -120,8 +133,28 @@ export class JoystickControls extends TouchInput {
       // up / down only when the thumb clearly goes that way (running with a wobbly thumb doesn't jump)
       st.up = dy < -STICK_R * 0.45 && -dy > Math.abs(dx) * 0.5;
       st.down = dy > STICK_R * 0.5 && dy > Math.abs(dx) * 0.8;
+      if (this.rings === 2) {
+        // Joystick 2: up = jump; on into the outer ring = second jump (flip, wall bounce)
+        const outer = inOuterUp(dx, dy, STICK_R, this.inOuter);
+        if (this.pendingJump) {
+          st.jumpPressed = true;
+          this.pendingJump = false;
+        }
+        if (this.armed && st.up) {
+          st.jumpPressed = true;
+          this.armed = false;
+        }
+        if (outer && !this.inOuter) {
+          // the whole way up in one frame: jump now, flip in the next one
+          if (st.jumpPressed) this.pendingJump = true;
+          else st.jumpPressed = true;
+          this.armed = false;
+        }
+        this.inOuter = outer;
+        if (dy > -STICK_R * 0.3) this.armed = true;
+      }
       // jump: push up. Second jump (flip in the air, wall bounce): a tiny ease-off and push again.
-      if (this.armed) {
+      else if (this.armed) {
         const fire =
           this.troughDy === null
             ? st.up // from rest: clearly up
@@ -143,6 +176,7 @@ export class JoystickControls extends TouchInput {
     } else {
       this.armed = true;
       this.troughDy = null;
+      this.inOuter = false;
     }
     for (const b of this.swings.splice(0)) {
       if (b === 'high') st.swingHigh = true;
@@ -160,6 +194,16 @@ export class JoystickControls extends TouchInput {
     const s = this.stick;
     const bx = s ? Phaser.Math.Clamp(s.bx, STICK_R, WIDTH - STICK_R) : this.mx(STICK_HOME.x);
     const by = s ? Phaser.Math.Clamp(s.by, 140 + STICK_R, HEIGHT - 20) : STICK_HOME.y;
+    if (this.rings === 2) {
+      // the outer ring: lit while the thumb is in it
+      const outerR = STICK_R * OUTER_MAX + 24;
+      if (this.inOuter) {
+        g.fillStyle(INK, 0.28);
+        g.fillCircle(bx, by, outerR);
+      }
+      g.lineStyle(this.inOuter ? 6 : 3, INK, this.inOuter ? 0.75 : s ? 0.4 : 0.2);
+      g.strokeCircle(bx, by, outerR);
+    }
     g.fillStyle(PAPER, s ? 0.35 : 0.2);
     g.fillCircle(bx, by, STICK_R + 18);
     g.lineStyle(4, INK, s ? 0.45 : 0.22);
@@ -169,7 +213,8 @@ export class JoystickControls extends TouchInput {
     if (s) {
       const dx = s.x - s.bx;
       const dy = s.y - s.by;
-      const d = Math.min(STICK_R, Math.hypot(dx, dy)) / (Math.hypot(dx, dy) || 1);
+      const max = this.inOuter ? STICK_R * OUTER_MAX : STICK_R;
+      const d = Math.min(max, Math.hypot(dx, dy)) / (Math.hypot(dx, dy) || 1);
       kx += dx * d;
       ky += dy * d;
     }
