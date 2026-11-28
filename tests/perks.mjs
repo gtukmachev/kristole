@@ -23,7 +23,7 @@ const waitFor = async (fn, ms = 15000) => { const t0 = Date.now(); while (Date.n
 await go('chapter=0&level=-1', 2600);
 let s = await snap();
 ok(s.phase === 'choose' && s.pickups.length === 3 && s.pickups.every((p) => p.choice), `level 0 shows 3 free perks (${s.place}, ${s.pickups.map((p) => p.id)})`);
-ok(s.pickups.every((p) => ['sword', 'freeze', 'long', 'spear', 'invis'].includes(p.id)), 'free perks only from the first five');
+ok(new Set(s.pickups.map((p) => p.id)).size === 3, 'three different free perks (any of the ten)');
 await page.screenshot({ path: 'tests/shots/v4-camp.png' });
 await hold('ArrowRight', 1500);
 await sleep(1200);

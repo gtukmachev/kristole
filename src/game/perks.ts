@@ -51,9 +51,9 @@ export function randomPerk(freeOnly = false, rand: () => number = Math.random): 
   return pool[pool.length - 1].id;
 }
 
-/** Three different random perks out of the first five. */
+/** Three different random perks out of all ten (so players get to know every perk, even the strong ones). */
 export function freeChoice(): PerkId[] {
-  return Phaser.Utils.Array.Shuffle(PERKS.slice(0, 5).map((p) => p.id)).slice(0, 3);
+  return Phaser.Utils.Array.Shuffle(PERKS.map((p) => p.id)).slice(0, 3);
 }
 
 type G = Phaser.GameObjects.Graphics;
