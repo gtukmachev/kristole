@@ -43,3 +43,38 @@ export function installKeyDebug() {
   }, true);
   (window as unknown as { __keyLog: typeof keyLog }).__keyLog = keyLog;
 }
+
+/**
+ * Debug perk strip (only with `?debug=true`): a row of circles at the bottom of the screen,
+ * one per perk slot; a click gives one more perk of that kind. Returns a remover.
+ */
+export function installPerkDebug(perks: { key: string; name: string }[], give: (slot: number) => void): () => void {
+  if (new URLSearchParams(window.location.search).get('debug') !== 'true') return () => {};
+  const bar = document.createElement('div');
+  Object.assign(bar.style, {
+    position: 'fixed', left: '50%', bottom: '8px', transform: 'translateX(-50%)', zIndex: '1001',
+    display: 'flex', gap: '6px', padding: '6px 8px', background: 'rgba(255,255,255,0.85)',
+    border: '2px solid #111', borderRadius: '22px', userSelect: 'none', touchAction: 'manipulation',
+  });
+  const circle = (label: string, title: string, onTap: () => void) => {
+    const b = document.createElement('div');
+    b.textContent = label;
+    b.title = title;
+    Object.assign(b.style, {
+      width: '30px', height: '30px', borderRadius: '50%', border: '2px solid #111', background: '#f08a1c',
+      color: '#111', font: 'bold 14px/30px Menlo, Consolas, monospace', textAlign: 'center', cursor: 'pointer',
+    });
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onTap();
+      b.style.background = '#ffd24a';
+      setTimeout(() => (b.style.background = '#f08a1c'), 120);
+    });
+    bar.appendChild(b);
+  };
+  perks.forEach((p, i) => circle(p.key, `+1 ${p.name}`, () => give(i)));
+  circle('∀', '+1 of every perk', () => perks.forEach((_p, i) => give(i)));
+  document.body.appendChild(bar);
+  return () => bar.remove();
+}

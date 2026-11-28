@@ -7,7 +7,7 @@ import { CAMP_PERK_SPOTS, chapterOfPlace, placeOf, type PlaceDef, type PlaceId, 
 import { PERKS, PERK_INDEX, PERK_MAX_STACK, freeChoice, randomPerk, type PerkId } from '../game/perks';
 import { Angel, DawnFx, PerkBar, Spear, activationFx, perkTexture } from '../game/perkFx';
 import { SECRETS, Secret, autoSecrets } from '../game/secrets';
-import { keyLog } from '../keyDebug';
+import { installPerkDebug, keyLog } from '../keyDebug';
 import { currentScheme, type SchemeId } from '../game/controls';
 import type { TouchInput } from '../game/TouchInput';
 import { createTouch } from '../game/touchSchemes';
@@ -242,6 +242,14 @@ export class GameScene extends Phaser.Scene implements PlayerHost, ZombieHost {
     };
     kb.on('keydown', onKey);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => kb.off('keydown', onKey));
+    // debug: circles at the bottom that give perks
+    const removePerkDebug = installPerkDebug(PERKS, (i) => {
+      if (this.perkCounts[i] >= PERK_MAX_STACK) return;
+      this.perkCounts[i]++;
+      this.perkBar?.pop(i);
+      keyLog(`  debug: +1 ${PERKS[i].name} -> ${this.perkCounts[i]}`);
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, removePerkDebug);
     kb.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
 
     const bloodCfg = (angle: { min: number; max: number }): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig => ({
